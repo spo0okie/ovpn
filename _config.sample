@@ -1,0 +1,31 @@
+#!/bin/sh
+#v1.0.2
+#Файл конфигурации скриптов управления OpenVPN 
+#сервера для режима клиент-сервер
+
+#Полное имя организации (для записи в сертификаты)
+org=SampleOrg
+
+#префиксы генерируемых файлов (персонализация по организации)
+prefix=Smpl
+
+#имя сервера для CA
+srvname=smpl-server
+
+#Адрес для подключения клиентов
+srvaddr=ovpn.sampleorg.ru
+
+#protocol and port
+proto=udp
+port=5100
+
+#VPN подсеть куда будут помещены клиенты
+vpnnet=10.68.68.0
+
+#which networks route over vpn
+subnets="68"
+
+#which dns servers to push
+dns=192.168.68.2
+
+sslconf=/etc/openvpn/openssl.cnf

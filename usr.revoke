@@ -1,0 +1,29 @@
+#!/bin/sh
+if [ -z "$1" ]; then
+    echo "Usage: $0 <username>"
+    exit
+fi
+
+. ./_config
+
+if [ ! -e ./clients/$prefix-$1/$prefix_$1.crt ]; then
+	echo "User $1 not found or revoked already"
+	exit
+fi
+
+echo "WARINNG: user $1 certificate will be revoked!"
+echo "Press Ctrl+C to abort..."
+waittime="5 4 3 2 1 0"
+#waittime="NOREMORSE"
+for t in $waittime; do
+    echo $t
+    sleep 2
+done
+
+if [ -n "$1" ]; then
+	echo "Revoking $1"
+	openssl ca -revoke ./clients/$prefix-$1/$prefix_$1.crt -config $sslconf
+	openssl ca -gencrl -out ./clients/revoked.crl -config $sslconf
+	mv ./clients/$prefix-$1 ./clients/revoked
+fi
+openssl crl -noout -text -in clients/revoked.crl

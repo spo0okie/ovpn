@@ -1,0 +1,38 @@
+#!/bin/sh
+
+if [ -z "$1" ]; then
+    echo "No username given"
+    exit
+fi
+
+. ./_config
+mkdir clients/$prefix-$1
+cd clients/$prefix-$1
+cp ./../../ca.pem ./${prefix}_ca.pem
+cp ./../../ta.key ./${prefix}_ta.key
+cp ./../../dh1024.pem ./${prefix}_dh1024.pem
+CONF=./${prefix}_$1.ovpn
+>$CONF
+echo "client">>$CONF
+echo "dev	tun">>$CONF
+echo "port	5100">>$CONF
+echo "proto	udp">>$CONF
+echo "remote	$srvaddr">>$CONF
+echo "ca	${prefix}_ca.pem">>$CONF
+echo "cert	${prefix}_$1.crt">>$CONF
+echo "key	${prefix}_$1.key">>$CONF
+echo "dh	${prefix}_dh1024.pem">>$CONF
+echo "tls-client">>$CONF
+echo "tls-auth	${prefix}_ta.key">>$CONF
+echo "cipher DES-EDE3-CBC">>$CONF
+echo "resolv-retry infinite">>$CONF
+echo "persist-key">>$CONF
+echo "persist-tun">>$CONF
+echo "ping 10">>$CONF
+echo "mssfix 1400">>$CONF
+echo "comp-lzo">>$CONF
+openssl genrsa -out ${prefix}_$1.key
+echo -e "RU\nUral\nChel\n$org\nIT\n$1\n\n\n" |openssl req -config $sslconf -new -nodes -key ${prefix}_$1.key -out ${prefix}_$1.csr
+openssl ca -batch -in ${prefix}_$1.csr -out ${prefix}_$1.crt  -config $sslconf
+cd ..
+zip -r $prefix-$1.zip ./$prefix-$1

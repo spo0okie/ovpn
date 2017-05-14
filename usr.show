@@ -1,0 +1,39 @@
+#!/bin/sh
+#Скрипт управления OpenVPN
+#Показывает сертификат пользователя в читаемом виде
+#v1.0.3
+
+
+if [ -z "$1" ]; then
+	echo "Usage: $0 <username|ca>"
+	echo "username - user name which sertificate to show"
+	echo "ca       - show CA sertificate instad of user"
+	exit
+fi
+
+. ./_config
+
+#расположение сертификата если пользователь активен
+if [ "$1" = "ca" ]; then
+	f=ca.pem
+else
+	f=./clients/$prefix-$1/${prefix}_$1.crt
+fi
+
+#расположение если сертификат отозван
+r=./clients/revoked/$prefix-$1/${prefix}_$1.crt
+
+#если нашелся активный сертификат
+if [ -e $f ]; then 
+	openssl x509 -noout -text -in $f
+	exit
+fi
+
+#если нашелся отозванный
+if [ -e $r ]; then
+	openssl x509 -noout -text -in $r
+	echo "USER IS REVOKED!"
+	exit
+fi
+
+echo "user not found"
