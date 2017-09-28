@@ -6,8 +6,10 @@ fi
 
 . ./_config
 
-if [ ! -e ./clients/$prefix-$1/$prefix_$1.crt ]; then
+cert=./clients/${prefix}-$1/${prefix}_$1.crt
+if [ ! -e $cert ]; then
 	echo "User $1 not found or revoked already"
+	echo "missing file $cert"
 	exit
 fi
 
@@ -22,7 +24,7 @@ done
 
 if [ -n "$1" ]; then
 	echo "Revoking $1"
-	openssl ca -revoke ./clients/$prefix-$1/$prefix_$1.crt -config $sslconf
+	openssl ca -revoke $cert -config $sslconf
 	openssl ca -gencrl -out ./clients/revoked.crl -config $sslconf
 	mv ./clients/$prefix-$1 ./clients/revoked
 fi
