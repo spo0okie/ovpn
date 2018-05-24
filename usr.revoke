@@ -1,17 +1,29 @@
 #!/bin/sh
 if [ -z "$1" ]; then
-    echo "Usage: $0 <username>"
-    exit
+	echo "Usage: $0 <username|list>"
+	echo "username - Name of user to revoke cert"
+	echo "list     - Show list of currently revoked users"
+	exit
 fi
 
 . ./_config
 
-cert=./clients/${prefix}-$1/${prefix}_$1.crt
-if [ ! -e $cert ]; then
-	echo "User $1 not found or revoked already"
-	echo "missing file $cert"
+function showcrl() {
+	openssl crl -noout -text -in ./clients/revoked.crl
+}
+
+if [ "$1" == "list" ]; then
+	showcrl
 	exit
 fi
+
+if [ ! -e ./clients/${prefix}-$1/${prefix}_$1.crt ]; then
+	cat ./clients/${prefix}-$1/${prefix}_$1.crt
+	echo "User $1 not found or revoked already"
+	exit
+fi
+
+./usr.show $1
 
 echo "WARINNG: user $1 certificate will be revoked!"
 echo "Press Ctrl+C to abort..."
@@ -22,10 +34,16 @@ for t in $waittime; do
     sleep 2
 done
 
-if [ -n "$1" ]; then
-	echo "Revoking $1"
-	openssl ca -revoke $cert -config $sslconf
-	openssl ca -gencrl -out ./clients/revoked.crl -config $sslconf
-	mv ./clients/$prefix-$1 ./clients/revoked
+if [ ! -d ./clients/revoked ]; then
+	mkdir ./clients/revoked
 fi
-openssl crl -noout -text -in clients/revoked.crl
+
+echo "Revoking $1"
+
+openssl ca -revoke ./clients/${prefix}-$1/${prefix}_$1.crt -config $sslconf && \
+mv ./clients/${prefix}-$1 ./clients/revoked
+mv ./clients/${prefix}-$1.zip ./clients/revoked
+
+openssl ca -gencrl -out ./clients/revoked.crl -config $sslconf
+
+showcrl

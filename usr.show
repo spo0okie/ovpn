@@ -5,23 +5,35 @@
 
 
 if [ -z "$1" ]; then
-	echo "Usage: $0 <username|ca>"
-	echo "username - user name which sertificate to show"
-	echo "ca       - show CA sertificate instad of user"
+	echo "Usage help:"
+	echo "$0 <username> - show user certificate"
+	echo "$0 ca         - show CA sertificate instad of user"
+	echo "$0 revoked    - show revoked users list"
 	exit
 fi
 
 . ./_config
 
-#расположение сертификата если пользователь активен
-if [ "$1" = "ca" ]; then
-	f=ca.pem
-else
-	f=./clients/$prefix-$1/${prefix}_$1.crt
-fi
+case $1 in
+	[Cc][Aa])
+		echo "Searching for CA cert..."
+		f=./ca.pem
+	;;
+	[Ss][Ee][Rr][Vv]|[Ss][Ee][Rr][Vv][Ee][Rr]|[Ss][Rr][Vv])
+		echo "Searching for Server cert..."
+		f=./${prefix}-serv.crt
+	;;
+	[Rr][Ee][Vv][Oo][Kk][Ee][Dd])
+		./usr.revoke list
+		exit
+	;;
+	*)
+		echo "Searching for $1 cert..."
+		f=./clients/${prefix}-$1/${prefix}_$1.crt
+		r=./clients/revoked/${prefix}-$1/${prefix}_$1.crt
+	;;
+esac
 
-#расположение если сертификат отозван
-r=./clients/revoked/$prefix-$1/${prefix}_$1.crt
 
 #если нашелся активный сертификат
 if [ -e $f ]; then 

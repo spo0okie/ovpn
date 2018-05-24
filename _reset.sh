@@ -25,12 +25,12 @@ touch ./clients/revoked.crl
 
 echo "Zeroing counters"
 rm -f ./*.old
-> ./index
-echo "00" > ./serial
-echo "00" > ./crlnumber
+> ./clients/index
+echo "00" > ./clients/serial
+echo "00" > ./clients/crlnumber
 
 echo "Creating sertificates ... "
-echo -e "RU\nUral\nChel\n$org\nIT\n$srvname\n\n" | openssl req -config $sslconf -new -nodes -x509 -keyout ca.key -out ca.pem -days 3650
+echo -e "RU\nUral\nChel\n$org\nIT\n$srvname\n\n" | openssl req -config $sslconf -new -nodes -x509 -keyout ca.key -out ca.pem -days 3650 -sha256
 openssl genrsa -out $prefix-serv.key
 echo -e "RU\nUral\nChel\n$org\nIT\n$srvname\n\n\n" | openssl req -config $sslconf -new -nodes -key $prefix-serv.key -out $prefix-serv.csr
 openssl ca -config $sslconf -batch -in $prefix-serv.csr -out $prefix-serv.cert
@@ -50,21 +50,21 @@ echo "tls-auth /etc/openvpn/ta.key" >> $conf
 echo "dh /etc/openvpn/dh1024.pem" >> $conf
 echo "crl-verify /etc/openvpn/clients/revoked.crl" >> $conf
 echo "tls-server" >> $conf
-echo "cipher DES-EDE3-CBC" >> $conf
+echo "cipher AES-256-CBC" >> $conf
 echo "server $vpnnet 255.255.255.0" >> $conf
 echo "persist-key" >> $conf
 echo "persist-tun" >> $conf
 echo "fast-io" >> $conf
 echo "comp-lzo" >> $conf
-echo "status openvpn.status" >> $conf
+echo "status /var/log/openvpn.status" >> $conf
 echo "ifconfig-pool-persist /etc/openvpn/pool.ip 360000" >> $conf
-echo "log append /etc/openvpn/server.log" >> $conf
+echo "log-append /var/log/openvpn-server.log" >> $conf
 echo "client-config-dir /etc/openvpn/ccd" >> $conf
 echo "client-connect /etc/openvpn/route-client" >> $conf
 echo "verb 3" >> $conf
 echo "mute 10" >> $conf
 echo "script-security 2" >> $conf
-echo "link-mtu 1472" >> $conf
+echo ";link-mtu 1472" >> $conf
 
 echo "push \"route $vpnnet 255.255.255.0\"" >> $conf
 
@@ -77,7 +77,7 @@ for ns in $dns; do
 done
 
 echo "Initializing revoke.crl"
-./user.new revoke_me
-./user.revoke revoke_me
+./usr.new revoke_me
+./usr.revoke revoke_me
 
 echo "done"

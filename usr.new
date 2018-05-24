@@ -4,13 +4,28 @@ if [ -z "$1" ]; then
     echo "No username given"
     exit
 fi
-
 . ./_config
+
+cipher=`cat server.conf | grep -E "^cipher" | cut -d ' ' -f2`
+
+if [ $1 = ca ]; then
+	openssl x509 -in ./ca.pem -days 3650 -out ca_new.pem -signkey ./ca.key
+	echo "New CA certificate stored in ca_new.pem"
+	exit
+fi
+
+if [ $1 = serv ]; then
+	openssl genrsa -out ${prefix}-$1.key
+	echo -e "RU\nUral\nChel\n$org\nIT\n$srvname\n\n\n" |openssl req -config $sslconf -new -nodes -key ${prefix}-$1.key -out ${prefix}-$1.csr -sha256
+	openssl ca -batch -in ${prefix}-$1.csr -out ${prefix}-$1.crt -config $sslconf
+	exit
+fi
+
 mkdir clients/$prefix-$1
 cd clients/$prefix-$1
 cp ./../../ca.pem ./${prefix}_ca.pem
 cp ./../../ta.key ./${prefix}_ta.key
-cp ./../../dh1024.pem ./${prefix}_dh1024.pem
+#cp ./../../dh1024.pem ./${prefix}_dh1024.pem
 CONF=./${prefix}_$1.ovpn
 >$CONF
 echo "client">>$CONF
@@ -21,16 +36,17 @@ echo "remote	$srvaddr">>$CONF
 echo "ca	${prefix}_ca.pem">>$CONF
 echo "cert	${prefix}_$1.crt">>$CONF
 echo "key	${prefix}_$1.key">>$CONF
-echo "dh	${prefix}_dh1024.pem">>$CONF
+#echo "dh	${prefix}_dh1024.pem">>$CONF
 echo "tls-client">>$CONF
 echo "tls-auth	${prefix}_ta.key">>$CONF
-echo "cipher DES-EDE3-CBC">>$CONF
+echo "cipher $cipher">>$CONF
 echo "resolv-retry infinite">>$CONF
 echo "persist-key">>$CONF
 echo "persist-tun">>$CONF
 echo "ping 10">>$CONF
 echo "mssfix 1400">>$CONF
 echo "comp-lzo">>$CONF
+cp $CONF ./${prefix}_$1.conf
 openssl genrsa -out ${prefix}_$1.key
 echo -e "RU\nUral\nChel\n$org\nIT\n$1\n\n\n" |openssl req -config $sslconf -new -nodes -key ${prefix}_$1.key -out ${prefix}_$1.csr
 openssl ca -batch -in ${prefix}_$1.csr -out ${prefix}_$1.crt  -config $sslconf
