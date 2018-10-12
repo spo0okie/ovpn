@@ -1,0 +1,6 @@
+#!/bin/sh
+
+. ./_config
+
+openssl ca -gencrl -keyfile ./ca.key -cert ./ca.pem -out ./clients/revoked.crl -config $sslconf
+
