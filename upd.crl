@@ -2,5 +2,5 @@
 
 . ./_config
 
-openssl ca -gencrl -keyfile ./ca.key -cert ./ca.pem -out ./clients/revoked.crl -config $sslconf
+openssl ca -gencrl -keyfile ./ca.key -cert ./ca.pem -crldays 720 -out ./clients/revoked.crl -config $sslconf
 
