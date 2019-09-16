@@ -85,4 +85,13 @@ echo "Initializing revoke.crl"
 ./usr.new revoke_me
 ./usr.revoke revoke_me
 
+if [ ! -f ./route-client ]; then
+    echo -e "#!/bin/sh\nexit 0" > ./route-client
+fi
+
+if [ ! -x ./route-client ]; then
+    chmod 555 ./route-client
+fi
+
+
 echo "done"
