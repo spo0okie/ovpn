@@ -29,9 +29,14 @@ rm -f ./*.old
 echo "00" > ./clients/serial
 echo "00" > ./clients/crlnumber
 
+
+mkdir -p ./certs
+mkdir -p ./ccd
+
 echo "Creating sertificates ... "
 echo -e "RU\nUral\nChel\n$org\nIT\n$srvname\n\n" | openssl req -config $sslconf -new -nodes -x509 -keyout ca.key -out ca.pem -days 3650 -sha256
 openssl genrsa -out $prefix-serv.key
+chmod 400 ./$prefix-serv.key
 echo -e "RU\nUral\nChel\n$org\nIT\n$srvname\n\n\n" | openssl req -config $sslconf -new -nodes -key $prefix-serv.key -out $prefix-serv.csr
 openssl ca -config $sslconf -batch -in $prefix-serv.csr -out $prefix-serv.cert
 openvpn --genkey --secret ta.key
@@ -79,5 +84,14 @@ done
 echo "Initializing revoke.crl"
 ./usr.new revoke_me
 ./usr.revoke revoke_me
+
+if [ ! -f ./route-client ]; then
+    echo -e "#!/bin/sh\nexit 0" > ./route-client
+fi
+
+if [ ! -x ./route-client ]; then
+    chmod 555 ./route-client
+fi
+
 
 echo "done"
