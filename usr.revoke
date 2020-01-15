@@ -42,7 +42,6 @@ echo "Revoking $1"
 
 openssl ca -revoke ./clients/${prefix}-$1/${prefix}_$1.crt -config $sslconf && \
 mv ./clients/${prefix}-$1 ./clients/revoked
-mv ./clients/${prefix}-$1.zip ./clients/revoked
 
 openssl ca -gencrl -out ./clients/revoked.crl -config $sslconf
 
