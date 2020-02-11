@@ -58,7 +58,7 @@ echo "port		5100"		>>$CONF
 echo "proto		udp"		>>$CONF
 echo "remote	$srvaddr"	>>$CONF
 echo "<ca>"					>>$CONF
-cat		${prefix}_ca.pem	>>$CONF
+cat		ca.pem				>>$CONF
 echo "</ca>"				>>$CONF
 echo "<cert>"				>>$CONF
 cat		$certfile			>>$CONF
@@ -67,7 +67,7 @@ echo "<key>"				>>$CONF
 cat		$keyfile			>>$CONF
 echo "</key>"				>>$CONF
 echo "<tls-auth>"			>>$CONF
-cat		${prefix}_ta.key	>>$CONF
+cat		ta.key				>>$CONF
 echo "</tls-auth>"			>>$CONF
 echo "tls-client"			>>$CONF
 echo "cipher $cipher"		>>$CONF

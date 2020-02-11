@@ -10,7 +10,7 @@ org=SampleOrg
 prefix=Smpl
 
 #имя сервера для CA
-srvname=smpl-server
+srvname=$prefix-server
 
 #Адрес для подключения клиентов
 srvaddr=ovpn.sampleorg.ru
@@ -23,9 +23,11 @@ port=5100
 vpnnet=10.68.68.0
 
 #which networks route over vpn
-subnets="68"
+subnets="10.68.68.0"
 
 #which dns servers to push
 dns=192.168.68.2
 
-sslconf=/etc/openvpn/openssl.cnf
+ovpndir=/etc/openvpn/server
+
+sslconf=$ovpndir/openssl.cnf
