@@ -1,4 +1,5 @@
-#!/bin/sh
+#!/bin/bash
+
 if [ -z "$1" ]; then
 	echo "Usage: $0 <username|list>"
 	echo "username - Name of user to revoke cert"

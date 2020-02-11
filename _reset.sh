@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 . ./_config
 echo "WARINNG NOW RESETING OPENVPN SERVER CERTIFICATES ($org/$prefix $srvname/$srvaddr)"
 echo "Press Ctrl+C to abort..."
@@ -35,6 +35,7 @@ mkdir -p ./ccd
 
 echo "Creating sertificates ... "
 echo -e "RU\nUral\nChel\n$org\nIT\n$srvname\n\n" | openssl req -config $sslconf -new -nodes -x509 -keyout ca.key -out ca.pem -days 3650 -sha256
+
 openssl genrsa -out $prefix-serv.key
 chmod 400 ./$prefix-serv.key
 echo -e "RU\nUral\nChel\n$org\nIT\n$srvname\n\n\n" | openssl req -config $sslconf -new -nodes -key $prefix-serv.key -out $prefix-serv.csr
