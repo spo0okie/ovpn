@@ -10,9 +10,14 @@ chmod 755 _reset.sh                               #разрешаем иници
 ```
   
 заполняем _config  
+заполняем openssl.cfg (по желанию)
 выполняем  
   
 ```bash
 _reset.sh                                         #инициируем инстанс openvpn
 chmod 644 _reset.sh                               #защищаемся от переинициализации боевого инстанса
 ```
+
+### создать пользователя
+usr.new <username>
+конфиг пользователя /users/prefix_username/prefix_username.ovpn
