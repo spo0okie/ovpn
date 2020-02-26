@@ -19,5 +19,5 @@ chmod 644 _reset.sh                               #защищаемся от п�
 ```
 
 ### создать пользователя
-usr.new <username>
+usr.new username  
 конфиг пользователя /users/prefix_username/prefix_username.ovpn
