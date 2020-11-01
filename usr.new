@@ -54,8 +54,8 @@ fi
 >$CONF
 echo "client">>$CONF
 echo "dev		tun"		>>$CONF
-echo "port		5100"		>>$CONF
-echo "proto		udp"		>>$CONF
+echo "port		$port"		>>$CONF
+echo "proto		$proto"		>>$CONF
 echo "remote	$srvaddr"	>>$CONF
 echo "<ca>"					>>$CONF
 cat		ca.pem				>>$CONF
