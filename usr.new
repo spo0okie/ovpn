@@ -4,7 +4,10 @@ if [ -z "$1" ]; then
     echo "No username given"
     exit
 fi
-. ./_config
+
+SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )" #"
+. $SCRIPTPATH/_config
+. $SCRIPTPATH/_lib
 
 
 
@@ -39,7 +42,7 @@ $2"
 
 
 
-cipher=`cat server.conf | grep -E "^cipher" | cut -d ' ' -f2`
+cipher=`cat $ovpndir/server.conf | grep -E "^cipher" | cut -d ' ' -f2`
 
 if [ $1 = ca ]; then
 	openssl x509 -in ./ca.pem -days 3650 -out ca_new.pem -signkey ./ca.key
@@ -55,12 +58,11 @@ if [ $1 = serv ]; then
 fi
 
 
-userdir=clients/$prefix-$1
+userdir=$ovpndir/clients/$prefix-$1
 keyfile=$userdir/${prefix}_$1.key
 certfile=$userdir/${prefix}_$1.crt
 csrfile=$userdir/${prefix}_$1.csr
 CONF=$userdir/${prefix}_$1.ovpn
-ccdln=ccd/$1
 ccd=$userdir/ccd
 
 mkdir -p $userdir
@@ -88,58 +90,71 @@ fi
 if [ -s $ccd ]; then
 	echo "CCD file already exists"
 else
-	if [ -n "$inventoryUrl" ]; then
-		echo "Fetching first unused IP in $vpnnet"
-		invData=`curl -k -s $inventoryApiUrl/net-ips/first-unused?text_addr=$vpnnet`
-		addr=`echo $invData | jq -r .text_addr`
+	if [ -n "$inventoryApiUrl" ]; then
+		echo "Fetching reserved IP for ovpn-$1"
+		
+		addr=`inventoryGetPinnedIp ovpn-$1`
+		if [ "$addr" == "null" ]; then
+			echo "ERR fetching reserved addr."
+			echo "Fetching first unused IP in $vpnnet"
+			addr=`inventoryGetUnusedIp $vpnnet`
+			if [ "$addr" == "null" ]; then
+				echo "HALT: ERR fetching unused IP!"
+				exit 10
+			fi
+		else
+			#сохраненный адрес получаем без подсети, поэтому дописываем суффикс от сети(предполагаем что адрес из нее) и конвертируем в маску
+			mask=`networkSuffix $vpnnet`
+			addr=`suffix2mask $addr/$mask`
+		fi
 		echo "got $addr"
-		echo "ifconfig-push $addr 255.255.255.0" > $ccd
+		echo "ifconfig-push $addr" > $ccd
 	else
 		echo "Creating empty CCD"
 		touch $ccd
 	fi
-		echo "push \"route $vpnnet 255.255.255.0\"" >> $ccd
-		for netw in $subnets; do
-			echo "push \"route $netw 255.255.255.0\"" >> $ccd
-		done
+
+	octetRoute=`suffix2mask $vpnnet`
+	echo "push \"route $octetRoute\"" >> $ccd
+	for netw in $subnets; do
+		octetRoute=`suffix2mask $netw`
+		echo "push \"route $octetRoute\"" >> $ccd
+	done
 fi
 
-if [ -f $ccdln ]; then
-	echo "CCD link already exists"
+
+if [ -s $CONF ]; then
+	echo "conf file already exists"
 else
-	echo "Linking CCD to user dir"
-	ln -s `pwd`/$ccd $ccdln
-fi
-
-
 >$CONF
-echo "client">>$CONF
-echo "dev		tun"		>>$CONF
-echo "port		$port"		>>$CONF
-echo "proto		$proto"		>>$CONF
-echo "remote	$srvaddr"	>>$CONF
-echo "<ca>"					>>$CONF
-cat		ca.pem				>>$CONF
-echo "</ca>"				>>$CONF
-echo "<cert>"				>>$CONF
-cat		$certfile			>>$CONF
-echo "</cert>"				>>$CONF
-echo "<key>"				>>$CONF
-cat		$keyfile			>>$CONF
-echo "</key>"				>>$CONF
-echo "<tls-auth>"			>>$CONF
-cat		ta.key				>>$CONF
-echo "</tls-auth>"			>>$CONF
-echo "tls-client"			>>$CONF
-echo "cipher $cipher"		>>$CONF
-echo "data-ciphers $cipher"	>>$CONF
-echo "resolv-retry infinite">>$CONF
-echo "persist-key"			>>$CONF
-echo "persist-tun"			>>$CONF
-#echo "ping 10"				>>$CONF
-#echo "mssfix 1400"			>>$CONF
-#echo "comp-lzo"				>>$CONF
-cp $CONF $userdir/${prefix}_$1.conf
+	echo "client">>$CONF
+	echo "dev		tun"		>>$CONF
+	echo "port		$port"		>>$CONF
+	echo "proto		$proto"		>>$CONF
+	echo "remote	$srvaddr"	>>$CONF
+	echo "<ca>"					>>$CONF
+	cat		$ovpndir/ca.pem		>>$CONF
+	echo "</ca>"				>>$CONF
+	echo "<cert>"				>>$CONF
+	cat		$certfile			>>$CONF
+	echo "</cert>"				>>$CONF
+	echo "<key>"				>>$CONF
+	cat		$keyfile			>>$CONF
+	echo "</key>"				>>$CONF
+	echo "<tls-auth>"			>>$CONF
+	cat		$ovpndir/ta.key		>>$CONF
+	echo "</tls-auth>"			>>$CONF
+	echo "tls-client"			>>$CONF
+	echo "cipher $cipher"		>>$CONF
+	echo "data-ciphers $cipher"	>>$CONF
+	echo "resolv-retry infinite">>$CONF
+	echo "persist-key"			>>$CONF
+	echo "persist-tun"			>>$CONF
+	#echo "ping 10"				>>$CONF
+	#echo "mssfix 1400"			>>$CONF
+	#echo "comp-lzo"				>>$CONF
+	cp $CONF $userdir/${prefix}_$1.conf
+fi
 
 
 
@@ -152,3 +167,15 @@ if [ -n "$inventoryApiUrl" ]; then
 		attachUserIp $1 $ip
 	fi
 fi
+
+header="#!/bin/bash"
+
+echo -e "$header\n$ovpndir/usr.enable $1 \$*" > $userdir/_enable
+chmod 755 $userdir/_enable
+
+echo -e "$header\n$ovpndir/usr.disable $1 \$*" > $userdir/_disable
+chmod 755 $userdir/_disable
+
+echo -e "$header\n$ovpndir/usr.new $1 \$*" > $userdir/_renew
+chmod 755 $userdir/_renew
+
