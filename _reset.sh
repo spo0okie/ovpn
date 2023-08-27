@@ -57,11 +57,13 @@ echo "dh $ovpndir/dh1024.pem" >> $conf
 echo "crl-verify $ovpndir/clients/revoked.crl" >> $conf
 echo "tls-server" >> $conf
 echo "cipher AES-256-CBC" >> $conf
+echo "data-ciphers AES-256-CBC" >> $conf
 echo "server $vpnnet 255.255.255.0" >> $conf
+echo "topology subnet" >> $conf
 echo "persist-key" >> $conf
 echo "persist-tun" >> $conf
 echo "fast-io" >> $conf
-echo "comp-lzo" >> $conf
+#echo "comp-lzo" >> $conf
 echo "status /var/log/openvpn.status" >> $conf
 echo "ifconfig-pool-persist $ovpndir/pool.ip 360000" >> $conf
 echo "log-append /var/log/openvpn-server.log" >> $conf
@@ -71,6 +73,7 @@ echo "verb 3" >> $conf
 echo "mute 10" >> $conf
 echo "script-security 2" >> $conf
 echo ";link-mtu 1472" >> $conf
+echo "keepalive 10 60" >> $conf
 
 echo "push \"route $vpnnet 255.255.255.0\"" >> $conf
 

@@ -6,6 +6,39 @@ if [ -z "$1" ]; then
 fi
 . ./_config
 
+
+
+#прописать ползователю $1 ip адресс $2
+function attachUserIp() {
+	invUser=`curl -k -s $inventoryApiUrl/users/view?login=$1`
+	userid=`echo $invUser|jq -r .id`
+	ips=`echo $invUser|jq -r .ips`
+	user=`echo $invUser|jq -r .Login`
+
+	if [ "$1" != "$user" ]; then
+		echo "Пользователь $1 не найден"
+		return 0
+	fi
+
+	#echo $invUser
+
+	if echo "$ips" | grep -q "$2"; then
+		echo "IP адрес $2 уже закреплен за $1"
+		return 0
+	else
+
+		if [ "$ips" == "null" ] ; then
+			ips=$2
+		else
+			ips="$ips
+$2"
+		fi
+		curl -s -d "ips=$ips" -X PUT $inventoryApiUrl/users/$userid >>/dev/null
+	fi
+}
+
+
+
 cipher=`cat server.conf | grep -E "^cipher" | cut -d ' ' -f2`
 
 if [ $1 = ca ]; then
@@ -27,8 +60,10 @@ keyfile=$userdir/${prefix}_$1.key
 certfile=$userdir/${prefix}_$1.crt
 csrfile=$userdir/${prefix}_$1.csr
 CONF=$userdir/${prefix}_$1.ovpn
+ccdln=ccd/$1
+ccd=$userdir/ccd
 
-mkdir $userdir
+mkdir -p $userdir
 
 if [ -s $keyfile ]; then
 	echo "keyfile already exists"
@@ -48,6 +83,32 @@ else
 	fi
 	echo "generating cert file"
 	openssl ca -batch -in $csrfile -out $certfile  -config $sslconf
+fi
+
+if [ -s $ccd ]; then
+	echo "CCD file already exists"
+else
+	if [ -n "$inventoryUrl" ]; then
+		echo "Fetching first unused IP in $vpnnet"
+		invData=`curl -k -s $inventoryApiUrl/net-ips/first-unused?text_addr=$vpnnet`
+		addr=`echo $invData | jq -r .text_addr`
+		echo "got $addr"
+		echo "ifconfig-push $addr 255.255.255.0" > $ccd
+	else
+		echo "Creating empty CCD"
+		touch $ccd
+	fi
+		echo "push \"route $vpnnet 255.255.255.0\"" >> $ccd
+		for netw in $subnets; do
+			echo "push \"route $netw 255.255.255.0\"" >> $ccd
+		done
+fi
+
+if [ -f $ccdln ]; then
+	echo "CCD link already exists"
+else
+	echo "Linking CCD to user dir"
+	ln -s `pwd`/$ccd $ccdln
 fi
 
 
@@ -71,10 +132,23 @@ cat		ta.key				>>$CONF
 echo "</tls-auth>"			>>$CONF
 echo "tls-client"			>>$CONF
 echo "cipher $cipher"		>>$CONF
+echo "data-ciphers $cipher"	>>$CONF
 echo "resolv-retry infinite">>$CONF
 echo "persist-key"			>>$CONF
 echo "persist-tun"			>>$CONF
-echo "ping 10"				>>$CONF
-echo "mssfix 1400"			>>$CONF
-echo "comp-lzo"				>>$CONF
+#echo "ping 10"				>>$CONF
+#echo "mssfix 1400"			>>$CONF
+#echo "comp-lzo"				>>$CONF
 cp $CONF $userdir/${prefix}_$1.conf
+
+
+
+# fetching IP
+if [ -n "$inventoryApiUrl" ]; then
+	ip=`grep -vE '^#' $ccd | grep 'ifconfig-push' | head -n 1 | cut -d' ' -f2`
+	if [ -n "$ip" ]; then
+		curl -s -d "text_addr=$ip&name=ovpn-$1" -X POST $inventoryApiUrl/net-ips/create >>/dev/null
+		curl -s -d "text_addr=$ip&name=ovpn-$1" -X PUT  $inventoryApiUrl/net-ips/upate >>/dev/null
+		attachUserIp $1 $ip
+	fi
+fi
