@@ -1,0 +1,21 @@
+#!/bin/bash
+
+if [ -z "$1" ]; then
+    echo "No username given"
+    exit
+fi
+
+SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )" #"
+. $SCRIPTPATH/_config
+
+
+userdir=$ovpndir/clients/$prefix-$1
+ccdln=$ovpndir/ccd/$1
+
+
+if [ -f $ccdln ]; then
+	echo "removing CCD link $ccd -> $ccdln"
+	rm -f $ccdln
+else
+	echo "User not enabled"
+fi
