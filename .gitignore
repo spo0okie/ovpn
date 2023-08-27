@@ -4,6 +4,7 @@ pool.ip
 route-client
 server.conf
 _config
+_arch
 push.to.*
 *.cert
 *.csr
