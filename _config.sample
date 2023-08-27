@@ -1,5 +1,5 @@
 #!/bin/sh
-#v1.0.2
+#v1.0.3
 #Файл конфигурации скриптов управления OpenVPN 
 #сервера для режима клиент-сервер
 
@@ -20,14 +20,17 @@ proto=udp
 port=5100
 
 #VPN подсеть куда будут помещены клиенты
-vpnnet=10.68.68.0
+vpnnet=10.64.68.0/24
 
 #which networks route over vpn
-subnets="10.68.68.0"
+subnets="10.64.68.0/24 10.20.0.0/16"
 
 #which dns servers to push
-dns=192.168.68.2
+dns="10.64.68.2 10.20.20.2"
 
 ovpndir=/etc/openvpn/server
 
 sslconf=$ovpndir/openssl.cnf
+
+#если укахзан, то будет хранить адреса пользователей в инвентори
+inventoryApiUrl=https://inventory.sampleOrg.local/web/api
