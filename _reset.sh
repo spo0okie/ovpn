@@ -1,5 +1,9 @@
 #!/bin/bash
-. ./_config
+
+SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )" #"
+. $SCRIPTPATH/_config
+
+
 echo "WARINNG NOW RESETING OPENVPN SERVER CERTIFICATES ($org/$prefix $srvname/$srvaddr)"
 echo "Press Ctrl+C to abort..."
 waittime="9 8 7 6 5 4 3 2 1 0 Last_Chance !!!!!!!"
