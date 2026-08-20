@@ -9,8 +9,6 @@ SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )" #"
 . $SCRIPTPATH/_config
 . $SCRIPTPATH/_lib
 
-
-
 #прописать ползователю $1 ip адресс $2
 function attachUserIp() {
 	invUser=`curl -k -s $inventoryApiUrl/users/search?login=$1`
@@ -43,6 +41,10 @@ $2"
 
 
 cipher=`cat $ovpndir/server.conf | grep -E "^cipher" | cut -d ' ' -f2`
+
+#если предыдущая конфигурация сети не задана - считаем что она не менялась
+previousVpnnet=${previousVpnnet:-$vpnnet}
+previousSubnets=${previousSubnets:-$subnets}
 
 if [ $1 = ca ]; then
 	openssl x509 -in ./ca.pem -days 3650 -out ca_new.pem -signkey ./ca.key
@@ -87,9 +89,11 @@ else
 	openssl ca -batch -in $csrfile -out $certfile  -config $sslconf
 fi
 
-if [ -s $ccd ]; then
+if [ -s $ccd ] && [ "$2" == "noupdate" ]; then
 	echo "CCD file already exists"
 else
+	prv=`mktemp`
+	new=`mktemp`
 	if [ -n "$inventoryApiUrl" ]; then
 		echo "Fetching reserved IP for ovpn-$1"
 		
@@ -104,22 +108,62 @@ else
 			fi
 		else
 			#сохраненный адрес получаем без подсети, поэтому дописываем суффикс от сети(предполагаем что адрес из нее) и конвертируем в маску
+			prvMask=`networkSuffix $previousVpnnet`
 			mask=`networkSuffix $vpnnet`
+			prvAddr=`suffix2mask $addr/$prvMask`
 			addr=`suffix2mask $addr/$mask`
 		fi
-		echo "got $addr"
-		echo "ifconfig-push $addr" > $ccd
+		if [ -z "$addr" ]; then
+			echo "HALT: error fetching user IP!"
+			exit 10
+		else
+			echo "got $addr"
+		fi
+		echo "ifconfig-push $prvAddr" > $prv
+		echo "ifconfig-push $addr" > $new
 	else
 		echo "Creating empty CCD"
-		touch $ccd
+		touch $prv
+		touch $new
 	fi
 
+	octetRoute=`suffix2mask $previousVpnnet`
+	echo "push \"route $octetRoute\"" >> $prv
+
 	octetRoute=`suffix2mask $vpnnet`
-	echo "push \"route $octetRoute\"" >> $ccd
+	echo "push \"route $octetRoute\"" >> $new
+
+	for netw in $previousSubnets; do
+		octetRoute=`suffix2mask $netw`
+		echo "push \"route $octetRoute\"" >> $prv
+	done
+
 	for netw in $subnets; do
 		octetRoute=`suffix2mask $netw`
-		echo "push \"route $octetRoute\"" >> $ccd
+		echo "push \"route $octetRoute\"" >> $new
 	done
+
+	prvmd5=$(md5sum "$prv" | cut -d ' ' -f 1)
+	newmd5=$(md5sum "$new" | cut -d ' ' -f 1)
+	if [ -s $ccd ]; then
+		curmd5=$(md5sum "$ccd" | cut -d ' ' -f 1)
+		if [ "$curmd5" == "$newmd5" ]; then
+			echo "no CCD changes ($1)"
+		else
+			if [ "$curmd5" == "$prvmd5" ]; then
+				echo "CCD version updating ($1)"
+				cp -f $new $ccd
+			else
+				echo "WARNING: custom CCD - no changes! ($1)"
+				cp -f $new $ccd.new
+				cp -f $prv $ccd.old
+			fi
+		fi
+	else
+		cp -f $new $ccd
+	fi
+	rm -f $new
+	rm -f $prv
 fi
 
 
