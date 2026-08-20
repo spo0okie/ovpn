@@ -1,0 +1,18 @@
+#!/bin/bash
+#заглушка google-authenticator для тестов
+#пишет аргументы в $GAUTH_LOG, кладет фиксированный секрет в файл из --secret=
+
+echo "$@" >> "${GAUTH_LOG:-/dev/null}"
+
+secretfile=""
+for a in "$@"; do
+	case "$a" in
+		--secret=*) secretfile=${a#--secret=};;
+	esac
+done
+
+if [ -n "$secretfile" ]; then
+	echo "TESTSECRET234567" > "$secretfile"
+	echo '" RATE_LIMIT 3 30' >> "$secretfile"
+	echo "11111111" >> "$secretfile"
+fi

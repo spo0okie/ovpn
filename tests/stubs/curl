@@ -1,0 +1,25 @@
+#!/bin/bash
+#заглушка curl для тестов
+#пишет аргументы вызова в $CURL_LOG
+#отвечает по таблице $CURL_ROUTES (строки: подстрока_URL<TAB>файл_ответа),
+#на неизвестный URL отвечает {}
+
+echo "$@" >> "${CURL_LOG:-/dev/null}"
+
+url=""
+for a in "$@"; do
+	case "$a" in
+		http://*|https://*) url=$a;;
+	esac
+done
+
+if [ -n "$CURL_ROUTES" ] && [ -f "$CURL_ROUTES" ]; then
+	while IFS=$'\t' read -r pattern respfile; do
+		[ -z "$pattern" ] && continue
+		case "$url" in
+			*"$pattern"*) cat "$respfile"; exit 0;;
+		esac
+	done < "$CURL_ROUTES"
+fi
+
+echo '{}'
