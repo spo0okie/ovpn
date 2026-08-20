@@ -1,0 +1,24 @@
+networks:
+  ovpntest:
+
+volumes:
+  shared:
+
+services:
+  server:
+    build: .
+    cap_add: [NET_ADMIN]
+    devices: ["/dev/net/tun"]
+    networks: [ovpntest]
+    volumes:
+      - "../..:/repo:ro"
+      - "shared:/shared"
+
+  client:
+    build: .
+    cap_add: [NET_ADMIN]
+    devices: ["/dev/net/tun"]
+    networks: [ovpntest]
+    volumes:
+      - "../..:/repo:ro"
+      - "shared:/shared"

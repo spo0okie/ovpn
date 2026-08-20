@@ -38,12 +38,26 @@ bash tests/run.sh
   поведения, которое нужно либо починить, либо осознанно принять
   правкой теста в том же коммите.
 
-## Уровень 2: интеграционные прогоны в Docker (план)
+## Уровень 2: интеграционные прогоны в Docker
 
-Место: `tests/integration/` (docker-compose.yml, Dockerfile'ы, сценарии).
-Запуск планируется как `bash tests/integration/run.sh` — поднять окружение,
-прогнать сценарии, погасить. Требуется Docker (Docker Desktop / WSL2 —
-`/dev/net/tun` и `NET_ADMIN` для контейнеров доступны).
+```sh
+bash tests/integration/run.sh
+```
+
+Поднимает окружение, гоняет сценарии, гасит за собой (`down -v`).
+Требуется Docker (Docker Desktop / WSL2 — `/dev/net/tun` и `NET_ADMIN`
+для контейнеров доступны). Прогон небыстрый: `_reset.sh` генерирует
+dhparam 4096. Сценарии 1–5 реализованы, 6–9 — по мере переноса фич.
+
+Файлы в `tests/integration/`:
+
+| Файл | Что делает |
+|---|---|
+| `run.sh` | драйвер на хосте: последовательность сценариев и assert'ы |
+| `docker-compose.yml` | сервисы `server` и `client` в общей сети, репозиторий смонтирован в `/repo`, обмен конфигами через volume `/shared` |
+| `Dockerfile` | debian + openvpn/openssl/jq/google-authenticator (один образ на оба сервиса) |
+| `inside/setup-server.sh` | в контейнере server: раскладка скриптов в `/etc/openvpn`, тестовый `_config`, `_reset.sh`, запуск openvpn-сервера (паузы обратного отсчета вырезаются sed'ом) |
+| `inside/connect.sh` | в контейнере client: подключение конфигом, ожидание success/fail, ping сервера через туннель, проверка пушнутого маршрута |
 
 ### Контейнеры
 
