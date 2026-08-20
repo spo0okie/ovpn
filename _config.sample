@@ -20,13 +20,13 @@ proto=udp
 port=5100
 
 #VPN подсеть куда будут помещены клиенты
-vpnnet=10.64.68.0/24
+vpnnet=192.168.77.0/24
 
 #which networks route over vpn
-subnets="10.64.68.0/24 10.20.0.0/16"
+subnets="192.168.77.0/24 172.20.0.0/16"
 
 #which dns servers to push
-dns="10.64.68.2 10.20.20.2"
+dns="192.168.77.2 172.20.20.2"
 
 ovpndir=/etc/openvpn/server
 
