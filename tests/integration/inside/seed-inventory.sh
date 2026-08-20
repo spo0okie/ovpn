@@ -7,14 +7,18 @@ set -e
 api=http://arms-app:8088/index.php/api
 
 echo "жду API инвентори (миграции на пустой БД - небыстро)"
-code=000
+#поиск несуществующей записи отвечает 404 с JSON-телом - это тоже "готов";
+#критерий готовности: ответ вообще парсится как JSON
+ready=0
 for i in $(seq 1 180); do
-	code=$(curl -s -o /dev/null -w '%{http_code}' "$api/net-ips/search?name=probe" || true)
-	[ "$code" == "200" ] && break
+	if curl -s "$api/net-ips/search?name=probe" | jq -e . >/dev/null 2>&1; then
+		ready=1
+		break
+	fi
 	sleep 2
 done
-if [ "$code" != "200" ]; then
-	echo "FAIL: API инвентори не поднялся (последний http-код: $code)"
+if [ "$ready" != "1" ]; then
+	echo "FAIL: API инвентори не поднялся (нет JSON-ответа за 6 минут)"
 	exit 1
 fi
 
