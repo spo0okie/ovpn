@@ -51,10 +51,37 @@ bash tests/run.sh
 |---|---|---|
 | `server` | debian/alpine + openvpn, openssl, jq, google-authenticator; репозиторий смонтирован в `/etc/openvpn` | здесь выполняются provision-скрипты и поднимается настоящий openvpn-сервер из сгенерированного `server.conf` (`cap_add: NET_ADMIN`, `/dev/net/tun`) |
 | `client` | openvpn | подключается сгенерированным клиентским конфигом к `server`; критерий — `Initialization Sequence Completed` + ping через туннель |
-| `inventory` (опциональный profile) | образ инвентори + его БД с фикстурами | проверка реальной выдачи/закрепления IP вместо заглушки curl |
+| `inventory` (опциональный profile) | `spo0okie/inventory:v1` + `mysql:8.0` | проверка реальной выдачи/закрепления IP вместо заглушки curl |
 
 Без profile `inventory` сценарии работают с пустым `inventoryApiUrl`
 (пустые CCD) либо с заглушкой как в уровне 1.
+
+### Профиль inventory: детали
+
+Приложение инвентори ([arms](https://github.com/spo0okie/inventory)) —
+Yii2 + MySQL, образ `spo0okie/inventory:v1`; при старте контейнер сам
+дожидается БД (хост `arms-db`), прогоняет миграции и поднимает apache.
+За основу берется `docker/docker-compose.yml` из репозитория arms.
+
+Что важно для тестового окружения:
+
+- **API**: базовый URL `http://<app>:8088/web/api`. Используемые
+  скриптами endpoint'ы: `net-ips/search?name=`,
+  `net-ips/first-unused?text_addr=`, `net-ips/create`, `net-ips/update`,
+  `users/search?login=`, `PUT users/<id>` (поле `ips`).
+- **Авторизация**: при дефолтном `useRBAC=false` API открыт — логин и
+  пароль в `inventoryApiUrl` тестового `_config` игнорируются, что для
+  тестов и нужно.
+- **Схема БД**: миграции в arms инкрементальные — на пустой БД схему не
+  создают. Нужен стартовый дамп (`tests/_data/arms_demo.sql` из
+  репозитория arms), путь к нему передается через переменную окружения
+  и монтируется в `/docker-entrypoint-initdb.d` mysql-контейнера;
+  миграции контейнер приложения докатит сам.
+- **Фикстуры**: `first-unused` требует записи в `networks` с
+  `text_addr`, точно равным `vpnnet` тестового конфига, а привязка IP —
+  пользователя с известным `Login`. Сеть создается SQL-вставкой после
+  старта (API-контроллера для networks нет), тестовый пользователь —
+  вставкой в `users` или берется из демо-дампа.
 
 ### Приемочные сценарии
 
