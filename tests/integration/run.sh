@@ -17,13 +17,18 @@ function cli() {	#выполнить в контейнере client
 	docker compose exec -T client bash "$@"
 }
 
+#WITH_INVENTORY=0 - пропустить сценарий с настоящей инвентори (arms)
+WITH_INVENTORY=${WITH_INVENTORY:-1}
+COMPOSE_PROFILES=""
+[ "$WITH_INVENTORY" == "1" ] && COMPOSE_PROFILES="--profile inventory"
+
 function teardown() {
-	docker compose down -v --remove-orphans >/dev/null 2>&1
+	docker compose $COMPOSE_PROFILES down -v --remove-orphans >/dev/null 2>&1
 }
 trap teardown EXIT
 
 echo "=== поднимаю окружение ==="
-docker compose up -d --build --quiet-pull 2>&1 | tail -3 || { echo "FAIL: docker compose up"; exit 1; }
+docker compose $COMPOSE_PROFILES up -d --build --quiet-pull 2>&1 | tail -3 || { echo "FAIL: docker compose up"; exit 1; }
 
 
 echo "== 1. Инициализация сервера (_reset.sh + запуск openvpn)"
@@ -114,5 +119,41 @@ assertExitCode "рядом с кастомным лежат ccd.new/ccd.old" "0"
 #клиент реально получает новый маршрут
 cli $INSIDE/connect.sh /shared/tst_mass01.ovpn success "172.21.0.0/16"
 assertExitCode "клиенту пушится добавленный маршрут" "0" "$?"
+
+
+if [ "$WITH_INVENTORY" == "1" ]; then
+	echo "== 8. Интеграция с настоящей инвентори (arms)"
+	srv "bash $INSIDE/seed-inventory.sh"
+	assertExitCode "инвентори поднялась и засидирована" "0" "$?"
+
+	srv "echo 'inventoryApiUrl=http://arms-app:8088/index.php/api' >> /etc/openvpn/_config"
+
+	srv "cd /etc/openvpn && ./usr.new inv1 >/dev/null && ./usr.enable inv1 >/dev/null"
+	assertExitCode "usr.new с инвентори" "0" "$?"
+
+	addr1=$(srv "grep ifconfig-push /etc/openvpn/clients/tst-inv1/ccd | cut -d' ' -f2" | tr -d ' \r\n')
+	assertEquals "inv1 получил адрес из тестовой сети" "192.168.77" "$(echo $addr1 | cut -d. -f1-3)"
+	[ -n "$addr1" ] && [ "$addr1" != "192.168.77.1" ]
+	assertExitCode "адрес не конфликтует с адресом сервера" "0" "$?"
+
+	srv "cd /etc/openvpn && ./usr.new inv2 >/dev/null"
+	addr2=$(srv "grep ifconfig-push /etc/openvpn/clients/tst-inv2/ccd | cut -d' ' -f2" | tr -d ' \r\n')
+	[ -n "$addr2" ] && [ "$addr1" != "$addr2" ]
+	assertExitCode "второй пользователь получил другой адрес ($addr1 / $addr2)" "0" "$?"
+
+	#перегенерация: закрепленный за конфигом адрес не меняется
+	srv "cd /etc/openvpn && rm /etc/openvpn/clients/tst-inv1/ccd && ./usr.new inv1 >/dev/null"
+	addr1b=$(srv "grep ifconfig-push /etc/openvpn/clients/tst-inv1/ccd | cut -d' ' -f2" | tr -d ' \r\n')
+	assertEquals "закрепленный адрес стабилен при перегенерации" "$addr1" "$addr1b"
+
+	#IP привязан к пользователю в инвентори
+	srv "curl -s 'http://arms-app:8088/index.php/api/users/search?login=inv1' | jq -r .ips | grep -qF '$addr1'"
+	assertExitCode "IP закреплен за пользователем в инвентори" "0" "$?"
+
+	#и туннель реально поднимается с выданным инвентори адресом
+	srv "cp /etc/openvpn/clients/tst-inv1/tst_inv1.ovpn /shared/"
+	cli $INSIDE/connect.sh /shared/tst_inv1.ovpn success "src $addr1"
+	assertExitCode "клиент поднял туннель с адресом из инвентори" "0" "$?"
+fi
 
 summarize

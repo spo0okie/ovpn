@@ -22,3 +22,29 @@ services:
     volumes:
       - "../..:/repo:ro"
       - "shared:/shared"
+
+  # профиль inventory: настоящая инвентаризация (arms) вместо заглушек
+  arms-db:
+    profiles: [inventory]
+    image: mysql:8.0
+    # binlog в mysql:8 включен по умолчанию: без этого флага CREATE FUNCTION
+    # в миграциях arms падает с 1419 (и молча - см. tests/README.md)
+    command: --log-bin-trust-function-creators=1
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: 1
+      MYSQL_DATABASE: arms
+      MYSQL_USER: arms-user
+      MYSQL_PASSWORD: arms-password
+      MYSQL_INITDB_SKIP_TZINFO: 1
+    networks: [ovpntest]
+
+  arms-app:
+    profiles: [inventory]
+    image: spo0okie/inventory:v1
+    depends_on: [arms-db]
+    networks: [ovpntest]
+    volumes:
+      - "./inventory/params-local.php:/var/www/arms/config/params-local.php:ro"
+      - "./inventory/web-local.php:/var/www/arms/config/web-local.php:ro"
+      - "./inventory/db-local.php:/var/www/arms/config/db-local.php:ro"
+      - "./inventory/ldap.php:/var/www/arms/config/ldap.php:ro"

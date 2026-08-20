@@ -47,7 +47,10 @@ bash tests/integration/run.sh
 Поднимает окружение, гоняет сценарии, гасит за собой (`down -v`).
 Требуется Docker (Docker Desktop / WSL2 — `/dev/net/tun` и `NET_ADMIN`
 для контейнеров доступны). Прогон небыстрый: `_reset.sh` генерирует
-dhparam 4096. Сценарии 1–5 реализованы, 6–9 — по мере переноса фич.
+dhparam 4096, а профиль inventory катит миграции на пустой БД.
+Реализованы сценарии 1–5 и 8, остальные — по мере переноса фич.
+`WITH_INVENTORY=0 bash tests/integration/run.sh` — прогон без
+инвентори (не тянет образы arms/mysql).
 
 Файлы в `tests/integration/`:
 
@@ -58,6 +61,8 @@ dhparam 4096. Сценарии 1–5 реализованы, 6–9 — по ме
 | `Dockerfile` | debian + openvpn/openssl/jq/google-authenticator (один образ на оба сервиса) |
 | `inside/setup-server.sh` | в контейнере server: раскладка скриптов в `/etc/openvpn`, тестовый `_config`, `_reset.sh`, запуск openvpn-сервера (паузы обратного отсчета вырезаются sed'ом) |
 | `inside/connect.sh` | в контейнере client: подключение конфигом, ожидание success/fail, ping сервера через туннель, проверка пушнутого маршрута |
+| `inside/seed-inventory.sh` | в контейнере server: ожидание API arms и сидирование через REST (сеть, занятый адрес шлюза, пользователи) |
+| `inventory/*.php` | локальные конфиги arms-контейнера (БД в arms-db, RBAC выключен, LDAP-заглушка) — монтируются поверх образа |
 
 ### Контейнеры
 
@@ -79,10 +84,17 @@ Yii2 + MySQL, образ `spo0okie/inventory:v1`; при старте конте
 
 Что важно для тестового окружения:
 
-- **API**: базовый URL `http://<app>:8088/web/api`. Используемые
-  скриптами endpoint'ы: `net-ips/search?name=`,
-  `net-ips/first-unused?text_addr=`, `net-ips/create`, `net-ips/update`,
-  `users/search?login=`, `PUT users/<id>` (поле `ips`).
+- **API**: базовый URL `http://<app>:8088/index.php/api` — `index.php`
+  в пути обязателен (без него запрос уходит на главную страницу
+  приложения). Используемые скриптами endpoint'ы:
+  `net-ips/search?name=`, `net-ips/first-unused?text_addr=`,
+  `net-ips/create`, `net-ips/update`, `users/search?login=`,
+  `PUT users/<id>` (поле `ips`).
+- **MySQL**: `mysql:8.0` идет с включенным binlog — контейнеру БД нужен
+  флаг `--log-bin-trust-function-creators=1`, иначе `CREATE FUNCTION`
+  в миграциях arms падает с ошибкой 1419, причем молча: миграции
+  выполняют мультистейтмент-пачки (`set names...; CREATE ...`), а PDO
+  проверяет только результат первого стейтмента.
 - **Авторизация**: при дефолтном `useRBAC=false` API открыт — логин и
   пароль в `inventoryApiUrl` тестового `_config` игнорируются, что для
   тестов и нужно.
@@ -91,10 +103,10 @@ Yii2 + MySQL, образ `spo0okie/inventory:v1`; при старте конте
   сам при старте, отдельный дамп не нужен.
 - **Фикстуры**: `first-unused` требует записи в `networks` с
   `text_addr`, точно равным `vpnnet` тестового конфига, а привязка IP —
-  пользователя с известным `Login`. REST-контроллер для networks
-  планируется в arms — после его появления сеть и пользователь
-  сидируются через API; до этого профиль inventory не реализуем
-  (сценарии 1–7 работают без него).
+  пользователя с известным `Login`. Всё сидируется через REST
+  (`inside/seed-inventory.sh`): сеть, запись-заглушка на адрес сервера
+  туннеля (`first-unused` выдает адреса с `.1`, а он занят сервером),
+  пользователи `inv1`/`inv2`.
 
 ### Приемочные сценарии
 
