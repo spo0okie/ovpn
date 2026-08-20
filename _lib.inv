@@ -14,8 +14,10 @@ function inventoryDataReq() {
 		#>&2 echo curl --insecure -s "$inventoryApiUrl/$reqPath?$data"
 		curl --insecure -s "$inventoryApiUrl/$reqPath?$data"
 	else
-		#>&2 echo curl --insecure -H "Content-Type: multipart/form-data;" -d "$data" -X $method -s $inventoryApiUrl/$reqPath
-		curl --insecure -H "Content-Type: multipart/form-data;" -d "$data" -X $method -s $inventoryApiUrl/$reqPath
+		#без явного Content-Type: curl сам ставит application/x-www-form-urlencoded.
+		#с multipart-заголовком (как было раньше) PHP не парсит urlencoded-тело,
+		#и POST-запросы теряли параметры (create молча падал валидацией)
+		curl --insecure -d "$data" -X $method -s $inventoryApiUrl/$reqPath
 	fi
 }
 
