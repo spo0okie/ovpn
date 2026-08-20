@@ -1,9 +1,10 @@
 #!/bin/bash
-#тесты функций базовой _lib
+#тесты функций базовой _lib и _lib.inv
 cd "$(dirname "$0")"
 . ./helpers.sh
 
 . $REPO_DIR/_lib
+. $REPO_DIR/_lib.inv
 
 echo "suffix2mask:"
 assertEquals "/24" "192.168.0.0 255.255.255.0" "`suffix2mask 192.168.0.0/24`"
@@ -19,22 +20,46 @@ echo "networkSuffix:"
 assertEquals "выделение суффикса" "24" "`networkSuffix 192.168.0.0/24`"
 assertEquals "суффикс /8" "8" "`networkSuffix 10.0.0.0/8`"
 
-echo "inventoryGetPinnedIp/inventoryGetUnusedIp (через заглушку curl):"
+echo "_lib.inv: получение IP (через заглушку curl):"
 newSandbox
 export inventoryApiUrl=https://inventory.test.local/api
-export vpnnet=10.64.68.0/24
 
 curlRoute "net-ips/search?name=ovpn-testuser" '{"id":7,"text_addr":"10.64.68.5","name":"ovpn-testuser"}'
 curlRoute "net-ips/first-unused" '{"text_addr":"10.64.68.9"}'
 
 assertEquals "pinned IP найден" "10.64.68.5" "`inventoryGetPinnedIp ovpn-testuser`"
 assertEquals "pinned IP не найден -> null" "null" "`inventoryGetPinnedIp ovpn-nonexistent`"
-assertEquals "первый свободный IP с маской" "10.64.68.9 255.255.255.0" "`inventoryGetUnusedIp $vpnnet`"
+assertEquals "первый свободный IP (без маски)" "10.64.68.9" "`inventoryGetUnusedIp 10.64.68.0/24`"
 
-#свободных адресов нет -> exit 10
+echo "_lib.inv: закрепление IP за конфигом (inventorySetIpInfo):"
 newSandbox
-curlRoute "net-ips/first-unused" '{"text_addr":null}'
-out=`inventoryGetUnusedIp $vpnnet 2>/dev/null`
-assertExitCode "нет свободных IP" "10" "$?"
+curlRoute "net-ips/search?addr=10.64.68.5" '{"id":3,"text_addr":"10.64.68.5","name":"ovpn-testuser"}'
+out=$sandbox/out.log
+
+inventorySetIpInfo 10.64.68.5 ovpn-testuser > $out
+assertFileContains "имя совпадает - без изменений" $out "уже закреплен"
+
+inventorySetIpInfo 10.64.68.5 ovpn-otheruser > $out
+assertFileContains "имя отличается - переименование" $out "переименован"
+assertFileContains "переименование через PUT net-ips/3" $CURL_LOG "net-ips/3"
+
+inventorySetIpInfo 10.64.68.77 ovpn-newuser > $out
+assertFileContains "адрес не найден - создание" $out "закреплен за конфигом"
+assertFileContains "создание через net-ips/create" $CURL_LOG "net-ips/create"
+
+echo "_lib.inv: привязка IP к пользователю (inventoryAttachUserIp):"
+newSandbox
+curlRoute "users/search?login=user1" '{"id":5,"Login":"user1","ips":"10.64.68.5"}'
+out=$sandbox/out.log
+
+inventoryAttachUserIp nosuchuser 10.64.68.9 > $out
+assertFileContains "пользователь не найден" $out "не найден"
+
+inventoryAttachUserIp user1 10.64.68.5 > $out
+assertFileContains "IP уже закреплен" $out "уже закреплен"
+
+inventoryAttachUserIp user1 10.64.68.9 > $out
+assertFileContains "новый IP закреплен" $out "закреплен за пользователем"
+assertFileContains "обновление через PUT users/5" $CURL_LOG "users/5"
 
 summarize

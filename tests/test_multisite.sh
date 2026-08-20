@@ -8,7 +8,8 @@ function deployMulti() {
 	newSandbox
 	ms=$sandbox/ms
 	mkdir -p $ms
-	cp $REPO_DIR/multisite/_lib $REPO_DIR/multisite/_lib.inv \
+	#_lib.inv теперь общий, живет в корне репозитория
+	cp $REPO_DIR/multisite/_lib $REPO_DIR/_lib.inv \
 	   $REPO_DIR/multisite/_ccd.check $REPO_DIR/multisite/usr.gen.ccd $ms/
 	cat > $ms/_config <<CFG
 prefix=tst

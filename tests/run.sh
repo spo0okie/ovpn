@@ -5,8 +5,8 @@ cd "$(dirname "$0")"
 
 echo "== проверка синтаксиса скриптов"
 synfail=0
-for f in ../_lib ../_reset.sh ../_renew.CA.sh ../upd.crl ../usr.* \
-         ../multisite/_lib ../multisite/_lib.inv ../multisite/_ccd.check \
+for f in ../_lib ../_lib.inv ../_reset.sh ../_renew.CA.sh ../upd.crl ../usr.* \
+         ../multisite/_lib ../multisite/_ccd.check \
          ../multisite/usr.* ../multisite/_list*.sh; do
 	if ! bash -n "$f" 2>&1; then
 		echo "  SYNTAX FAIL: $f"

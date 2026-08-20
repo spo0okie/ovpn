@@ -8,35 +8,7 @@ fi
 SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )" #"
 . $SCRIPTPATH/_config
 . $SCRIPTPATH/_lib
-
-#прописать ползователю $1 ip адресс $2
-function attachUserIp() {
-	invUser=`curl -k -s $inventoryApiUrl/users/search?login=$1`
-	userid=`echo $invUser|jq -r .id`
-	ips=`echo $invUser|jq -r .ips`
-	user=`echo $invUser|jq -r .Login`
-
-	if [ "$1" != "$user" ]; then
-		echo "Пользователь $1 не найден"
-		return 0
-	fi
-
-	#echo $invUser
-
-	if echo "$ips" | grep -q "$2"; then
-		echo "IP адрес $2 уже закреплен за $1"
-		return 0
-	else
-
-		if [ "$ips" == "null" ] ; then
-			ips=$2
-		else
-			ips="$ips
-$2"
-		fi
-		curl -k -s -d "ips=$ips" -X PUT $inventoryApiUrl/users/$userid >>/dev/null
-	fi
-}
+. $SCRIPTPATH/_lib.inv
 
 
 
@@ -107,6 +79,9 @@ else
 				echo "HALT: ERR fetching unused IP!"
 				exit 10
 			fi
+			#свободный адрес приходит без подсети - конвертируем в "адрес маска"
+			mask=`networkSuffix $vpnnet`
+			addr=`suffix2mask $addr/$mask`
 		else
 			#сохраненный адрес получаем без подсети, поэтому дописываем суффикс от сети(предполагаем что адрес из нее) и конвертируем в маску
 			prvMask=`networkSuffix $previousVpnnet`
@@ -207,9 +182,8 @@ fi
 if [ -n "$inventoryApiUrl" ]; then
 	ip=`grep -vE '^#' $ccd | grep 'ifconfig-push' | head -n 1 | cut -d' ' -f2`
 	if [ -n "$ip" ]; then
-		curl -k -s -d "text_addr=$ip&name=ovpn-$1" -X POST $inventoryApiUrl/net-ips/create >>/dev/null
-		curl -k -s -d "text_addr=$ip&name=ovpn-$1" -X PUT  $inventoryApiUrl/net-ips/update >>/dev/null
-		attachUserIp $1 $ip
+		inventorySetIpInfo $ip ovpn-$1
+		inventoryAttachUserIp $1 $ip
 	fi
 fi
 

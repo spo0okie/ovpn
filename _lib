@@ -36,25 +36,6 @@ function networkSuffix() {
 	echo $1|cut -d'/' -f2
 }
 
-function inventoryGetUnusedIp() {
-	network=$1
-	mask=`networkSuffix $1`
-
-	invData=`curl -k -s $inventoryApiUrl/net-ips/first-unused?text_addr=$network`
-	addr=`echo $invData | jq -r .text_addr`
-
-	if [ "$addr" == "null" ]; then
-		>&2 echo "ERR fetching addr: $inventoryApiUrl/net-ips/first-unused?text_addr=$vpnnet"
-		exit 10
-	fi
-
-	suffix2mask $addr/$mask
-}
-
-
-function inventoryGetPinnedIp() {
-	invData=`curl -k -s $inventoryApiUrl/net-ips/search?name=$1`
-	echo $invData | jq -r .text_addr
-}
+#функции обмена с инвентори переехали в _lib.inv
 
 
