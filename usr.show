@@ -1,7 +1,7 @@
 #!/bin/bash
 #Скрипт управления OpenVPN
 #Показывает сертификат пользователя в читаемом виде
-#v1.0.3
+#v1.0.4
 
 
 if [ -z "$1" ]; then
@@ -14,7 +14,7 @@ fi
 
 SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )" #"
 . $SCRIPTPATH/_config
-
+. $SCRIPTPATH/_lib
 
 case $1 in
 	[Cc][Aa])
@@ -24,6 +24,8 @@ case $1 in
 	[Ss][Ee][Rr][Vv]|[Ss][Ee][Rr][Vv][Ee][Rr]|[Ss][Rr][Vv])
 		echo "Searching for Server cert..."
 		f=./${prefix}-serv.crt
+		#_reset.sh исторически генерирует .cert, usr.new serv - .crt
+		[ -e "$f" ] || f=./${prefix}-serv.cert
 	;;
 	[Rr][Ee][Vv][Oo][Kk][Ee][Dd])
 		./usr.revoke list
@@ -32,19 +34,31 @@ case $1 in
 	*)
 		echo "Searching for $1 cert..."
 		f=./clients/${prefix}-$1/${prefix}_$1.crt
-		r=./clients/revoked/${prefix}-$1/${prefix}_$1.crt
+		#историческая раскладка (legacyCertsDir в _config): сертификаты,
+		#выданные до этих скриптов
+		if [ ! -e "$f" ] && [ -n "$legacyCertsDir" ]; then
+			f=`findCertByCN $1 $legacyCertsDir`
+		fi
+
+		#отозванные: папка с таймстампом, без таймстампа, историческая раскладка
+		r=`ls -d ./clients/revoked/${prefix}-$1.* ./clients/revoked/${prefix}-$1 2>/dev/null | tail -1`
+		if [ -n "$r" ]; then
+			r=$r/${prefix}_$1.crt
+		elif [ -n "$legacyCertsDir" ]; then
+			r=`findCertByCN $1 $legacyCertsDir/revoked`
+		fi
 	;;
 esac
 
 
 #если нашелся активный сертификат
-if [ -e $f ]; then 
+if [ -n "$f" ] && [ -e "$f" ]; then
 	openssl x509 -noout -text -in $f
 	exit
 fi
 
 #если нашелся отозванный
-if [ -e $r ]; then
+if [ -n "$r" ] && [ -e "$r" ]; then
 	openssl x509 -noout -text -in $r
 	echo "USER IS REVOKED!"
 	exit

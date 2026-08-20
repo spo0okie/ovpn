@@ -46,6 +46,13 @@ ovpndir=/etc/openvpn/server
 
 sslconf=$ovpndir/openssl.cnf
 
+#файл CRL (закомментировано = значение по умолчанию)
+#crlfile=./clients/revoked.crl
+
+#каталог сертификатов исторической раскладки (см. multisite/_config.sample);
+#в базовом варианте выключено - ./certs занят под new_certs_dir openssl
+#legacyCertsDir=
+
 #если укахзан, то будет хранить адреса пользователей в инвентори
 #если инвентори требует авторизацию - логин/пароль указываются прямо в URL
 #inventoryApiUrl=https://user:password@inventory.sampleOrg.local/web/api

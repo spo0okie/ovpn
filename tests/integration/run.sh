@@ -54,6 +54,12 @@ assertExitCode "конфиг содержит все inline-секции" "0" "$
 #серийник запоминаем до отзыва (потом папка уедет в revoked)
 user1serial=$(srv "openssl x509 -noout -serial -in /etc/openvpn/clients/tst-user1/tst_user1.crt | cut -d= -f2" | tr -d ' \r\n')
 
+srv "cd /etc/openvpn && ./usr.show user1 | grep -q 'CN = user1'"
+assertExitCode "usr.show показывает сертификат пользователя" "0" "$?"
+
+srv "cd /etc/openvpn && ./usr.show serv | grep -q 'Certificate:'"
+assertExitCode "usr.show serv находит серверный серт (.cert от reset)" "0" "$?"
+
 srv "cp /etc/openvpn/clients/tst-user1/tst_user1.ovpn /shared/"
 cli $INSIDE/connect.sh /shared/tst_user1.ovpn success
 assertExitCode "клиент поднял туннель и пингует сервер" "0" "$?"
@@ -71,6 +77,28 @@ assertExitCode "серийник в CRL" "0" "$?"
 
 cli $INSIDE/connect.sh /shared/tst_user1.ovpn fail
 assertExitCode "отозванный конфиг отвергается сервером" "0" "$?"
+
+srv "cd /etc/openvpn && ./usr.show user1 | grep -q 'USER IS REVOKED'"
+assertExitCode "usr.show видит отозванного (папка с таймстампом)" "0" "$?"
+
+#историческая раскладка: сертификат в legacyCertsDir без папки клиента
+srv "echo 'legacyCertsDir=./legacy-certs' >> /etc/openvpn/_config && cd /etc/openvpn && ./usr.new legacy1 >/dev/null && mkdir -p legacy-certs && cp clients/tst-legacy1/tst_legacy1.crt legacy-certs/legacy1.pem && rm -rf clients/tst-legacy1"
+assertExitCode "подготовлен сертификат исторической раскладки" "0" "$?"
+
+srv "cd /etc/openvpn && ./usr.show legacy1 | grep -q 'CN = legacy1'"
+assertExitCode "usr.show находит сертификат в legacyCertsDir" "0" "$?"
+
+srv "cd /etc/openvpn && ./usr.revoke legacy1 >/dev/null"
+assertExitCode "usr.revoke отзывает сертификат исторической раскладки" "0" "$?"
+
+srv "[ -e /etc/openvpn/legacy-certs/revoked/legacy1.pem ]"
+assertExitCode "сертификат убран в legacyCertsDir/revoked" "0" "$?"
+
+srv "cd /etc/openvpn && ./usr.show legacy1 | grep -q 'USER IS REVOKED'"
+assertExitCode "usr.show видит отозванного в исторической раскладке" "0" "$?"
+
+srv "cd /etc/openvpn && ./usr.revoke nosuchuser >/dev/null; [ \$? -eq 10 ]"
+assertExitCode "отзыв несуществующего пользователя дает код 10" "0" "$?"
 
 
 echo "== 4. Массовая генерация (10 пользователей)"

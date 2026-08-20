@@ -79,5 +79,14 @@ ovpndir=/etc/openvpn/
 #указываем путь к его конфигу
 sslconf=/etc/openvpn/openssl.cnf
 
+#файл CRL (в базовом варианте по умолчанию ./clients/revoked.crl)
+crlfile=./crl/crl.pem
+
+#каталог сертификатов исторической раскладки (выданных до этих скриптов) -
+#usr.show/usr.revoke ищут там по CN, отозванные уезжают в его подпапку revoked.
+#ВАЖНО: в базовом варианте ./certs занят под new_certs_dir openssl (копии
+#по серийникам) - там эту настройку включать нельзя
+legacyCertsDir=./certs
+
 passLetters="abcdefghjkmnopqrstuvwxyzABCDEFJHJKLMNPQRSTUVWXYZ!@#%&23456789"
 #passLetters="abcdefghjkmnopqrstuvwxyzABCDEFJHJKLMNPQRSTUVWZYZ-=_+.,:@^?()23456789"

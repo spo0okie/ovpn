@@ -36,6 +36,22 @@ function networkSuffix() {
 	echo $1|cut -d'/' -f2
 }
 
+#поиск сертификата по CN в исторической раскладке (*.pem, выданные до этих скриптов)
+# $1 - имя (CN)
+# $2 - каталог (например ./certs или ./certs/revoked)
+function findCertByCN() {
+	[ -d "$2" ] || return 0
+	for f in "$2"/*.pem; do
+		[ -e "$f" ] || continue
+		#парсим CN независимо от состава subject и версии openssl (CN = x / CN=x)
+		name=`openssl x509 -in $f -noout -subject | sed -E 's|.*CN ?= ?([^,/]*).*|\1|' | tr -d ' '`
+		if [ "$name" = "$1" ]; then
+			echo $f
+			return 0
+		fi
+	done
+}
+
 #функции обмена с инвентори переехали в _lib.inv
 
 

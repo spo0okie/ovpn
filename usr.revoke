@@ -9,10 +9,13 @@ fi
 
 SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )" #"
 . $SCRIPTPATH/_config
+. $SCRIPTPATH/_lib
 
+#файл CRL: по умолчанию как в базовом варианте, multisite переопределяет в _config
+crlfile=${crlfile:-./clients/revoked.crl}
 
 function showcrl() {
-	openssl crl -noout -text -in ./clients/revoked.crl
+	openssl crl -noout -text -in $crlfile
 }
 
 if [ "$1" == "list" ]; then
@@ -20,10 +23,18 @@ if [ "$1" == "list" ]; then
 	exit
 fi
 
-if [ ! -e ./clients/${prefix}-$1/${prefix}_$1.crt ]; then
-	cat ./clients/${prefix}-$1/${prefix}_$1.crt
+cert=./clients/${prefix}-$1/${prefix}_$1.crt
+legacycert=""
+if [ ! -e "$cert" ] && [ -n "$legacyCertsDir" ]; then
+	#историческая раскладка (legacyCertsDir в _config): сертификаты,
+	#выданные до этих скриптов
+	cert=`findCertByCN $1 $legacyCertsDir`
+	legacycert=$cert
+fi
+
+if [ -z "$cert" ] || [ ! -e "$cert" ]; then
 	echo "User $1 not found or revoked already"
-	exit
+	exit 10
 fi
 
 ./usr.show $1
@@ -43,9 +54,19 @@ fi
 
 echo "Revoking $1"
 
-openssl ca -revoke ./clients/${prefix}-$1/${prefix}_$1.crt -config $sslconf && \
-mv "./clients/${prefix}-$1" "./clients/revoked/${prefix}-$1.$(date +%F_%H-%M-%S)"
+openssl ca -revoke $cert -config $sslconf || exit 20
 
-openssl ca -gencrl -out ./clients/revoked.crl -config $sslconf
+#сертификат исторической раскладки убираем в $legacyCertsDir/revoked
+if [ -n "$legacycert" ]; then
+	mkdir -p $legacyCertsDir/revoked
+	mv "$legacycert" $legacyCertsDir/revoked/
+fi
+
+#папку клиента (если есть) архивируем с таймстампом
+if [ -d "./clients/${prefix}-$1" ]; then
+	mv "./clients/${prefix}-$1" "./clients/revoked/${prefix}-$1.$(date +%F_%H-%M-%S)"
+fi
+
+openssl ca -gencrl -out $crlfile -config $sslconf
 
 showcrl
