@@ -1,0 +1,83 @@
+#!/bin/sh
+#v1.0.2
+#Файл конфигурации скриптов управления OpenVPN 
+#сервера для режима клиент-сервер
+
+#Полное имя организации (для записи в сертификаты)
+org=Contoso
+
+#префиксы генерируемых файлов (персонализация по организации)
+prefix=contoso
+sites="chl klg mhk msk nn"
+
+#имя сервера для генерации CA
+srvname=$prefix-server
+
+#Адрес для подключения клиентов
+srvpostfix="-vpn.contoso.com -vpn2.contoso.com"
+
+#protocol and port
+proto=udp
+port=1194
+port2fa=1196
+
+#ssh-ключ для push/pull CCD и google-auth на серверы сайтов
+rsynckeyfile=/root/.ssh/openvpn.control
+
+#постфикс к имени сайта = ssh-имя сервера сайта (chl -> chl-ovpn.contoso.local)
+sshpostfix=-ovpn.contoso.local
+
+#пути на серверах сайтов
+remoteCcdDir=/etc/openvpn/mobile/ccd
+remoteGauthDir=/etc/google-auth
+
+#Nextcloud для доставки конфигов пользователям (usr.send)
+nextcloudUrl=https://nextcloud.contoso.com
+adUser=vpnbot
+adPassword=SecretPassword
+nextCloudUID=00000000-0000-0000-0000-000000000000
+
+#шлюз отправки СМС с паролями/ключами (usr.send)
+smsApiUrl=https://sms-gw.contoso.local:8082/sms/send
+
+inventoryApiUrl=https://inventory_user:inventory_password@inventory.contoso.local/web/api
+
+#VPN подсеть куда будут помещены клиенты
+klg_openvpn_lan=10.31.0.0/24
+klg_openvpn2fa_lan=10.131.0.0/24
+
+chl_openvpn_lan=10.32.0.0/24
+chl_openvpn2fa_lan=10.132.0.0/24
+
+mhk_openvpn_lan=10.33.0.0/24
+mhk_openvpn2fa_lan=10.133.0.0/24
+
+nn_openvpn_lan=10.34.0.0/24
+
+msk_openvpn_lan=10.35.0.0/24
+
+#какие маршруты добавлять в CCD по умолчанию
+push_routes="10.40.0.0/16 10.41.0.0/16 10.42.0.0/16 172.21.0.0/16"
+
+
+#шифрование для клиентов
+cipher=AES-256-CBC
+
+#which networks route over vpn
+
+#which dns servers to push
+chl_dns=10.32.0.10
+klg_dns=10.31.0.10
+mhk_dns=10.33.0.10
+msk_dns=10.35.0.10
+nn_dns=10.34.0.10
+
+ovpndir=/etc/openvpn/
+
+#конфиг openssl CA. для новой инсталляции подойдет openssl.cnf из корня
+#репозитория; если CA уже ведется где-то еще (например TinyCA) -
+#указываем путь к его конфигу
+sslconf=/etc/openvpn/openssl.cnf
+
+passLetters="abcdefghjkmnopqrstuvwxyzABCDEFJHJKLMNPQRSTUVWXYZ!@#%&23456789"
+#passLetters="abcdefghjkmnopqrstuvwxyzABCDEFJHJKLMNPQRSTUVWZYZ-=_+.,:@^?()23456789"

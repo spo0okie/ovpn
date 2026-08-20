@@ -1,0 +1,172 @@
+#!/bin/bash
+
+if [ -z "$1" ]; then
+    echo "No username given"
+    exit
+fi
+
+SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )" #"
+. $SCRIPTPATH/_config
+
+$SCRIPTPATH/usr.push.inv $1
+
+
+userdir=$SCRIPTPATH/clients/$prefix-$1
+keyfile=$userdir/${prefix}_$1.key
+certfile=$userdir/${prefix}_$1.crt
+csrfile=$userdir/${prefix}_$1.csr
+pwdfile=$userdir/passwd.txt
+goofile=$userdir/google.txt
+
+mkdir -p $userdir
+
+#путь к файлохранилищу vpnBot
+apiUrl=$nextcloudUrl/remote.php/dav/files/$nextCloudUID
+#создаем папки OpenVPN И пользователя
+curl -k -s -u $adUser:$adPassword -X MKCOL $apiUrl/openvpn >> /dev/null
+curl -k -s -u $adUser:$adPassword -X MKCOL $apiUrl/openvpn/$1 >> /dev/null
+
+curl -k --netrc -s -S -u $adUser:$adPassword -X PUT "$apiUrl/openvpn/$1/инструкция.pdf" -T "$SCRIPTPATH/send_files/инструкция.pdf"
+curl -k --netrc -s -S -u $adUser:$adPassword -X PUT "$apiUrl/openvpn/$1/инструкция_connect.pdf" -T "$SCRIPTPATH/send_files/инструкция_connect.pdf"
+ #>> /dev/null
+# curl -k --netrc -s -S -u $adUser:$adPassword -X PUT "$apiUrl/openvpn/$1/инструкция (дополнительно).pdf" -T "$SCRIPTPATH/send_files/инструкция2.pdf"
+#>> /dev/null
+
+used2fa=0
+
+for site in $sites; do
+
+	ovpn=${prefix}_${1}_${site}.ovpn
+	ovpncon=${prefix}_${1}_${site}_connect.ovpn
+	ovpn2fa=${prefix}_${1}_${site}_2fa.ovpn
+	ovpn2facon=${prefix}_${1}_${site}_2fa_connect.ovpn
+
+
+	site_mode=`$SCRIPTPATH/_ccd.check $1 $site`
+	#echo "$site_mode"
+	case "$site_mode" in
+		OVPN)
+			echo "Доступ к $site предоставляется без 2FA (Закидываю соотв конфиг в NEXTCLOUD)"
+			curl -k -s -u $adUser:$adPassword -X PUT $apiUrl/openvpn/$1/$ovpn --data-binary @$userdir/$ovpn >> /dev/null
+			curl -k -s -u $adUser:$adPassword -X PUT $apiUrl/openvpn/$1/$ovpncon --data-binary @$userdir/$ovpncon >> /dev/null
+		;;
+		OVPN2FA)
+			echo "Доступ к $site предоставляется через 2FA (Закидываю соотв конфиг в NEXTCLOUD)"
+			curl -k -s -u $adUser:$adPassword -X PUT $apiUrl/openvpn/$1/$ovpn2fa --data-binary @$userdir/$ovpn2fa >> /dev/null
+			curl -k -s -u $adUser:$adPassword -X PUT $apiUrl/openvpn/$1/$ovpn2facon --data-binary @$userdir/$ovpn2facon >> /dev/null
+			used2fa=1
+		;;
+		NONE)
+		;;
+		*)
+			echo $site_mode
+		;;
+	esac
+done
+
+curl -k -s -u $adUser:$adPassword -H "Accept: application/json" -X PROPFIND $apiUrl/openvpn/$1 | sed 's/<\/*d:href>/\n/g' | grep remote.php | cut -d'/' -f8 | grep -v '^$' > $userdir/nextcloud.txt
+filesCount=`cat $userdir/nextcloud.txt | wc -l`
+
+echo "пользователю предоставляется $filesCount конфигурационных файлов"
+if [ -z "$filesCount" ] || [ "$filesCount" -le 0 ]; then
+	echo "Почему файлов то нет??? Проверяй, что-то пошло не так. Не буду дальше работать"
+	exit 11
+fi
+
+
+ocsUrl=$nextcloudUrl/ocs/v2.php/apps/files_sharing/api/v1
+if [ -n "$2" ]; then
+	sharee=$2
+else
+	sharee=$1
+fi
+
+invUser=`curl -k -s $inventoryApiUrl/users/search?login=$sharee&expand=private_phone`
+mobile=`echo $invUser|jq -r .Mobile`
+if [ "$mobile" == "null" ] || [ -z "$mobile" ] ; then
+	mobile=`echo $invUser|jq -r .private_phone`
+fi
+if [ "$mobile" == "null" ] || [ -z "$mobile" ] ; then
+	echo "не могу найти сотовый для пользователя $sharee - отправка СМС невозможна"
+	echo "проверь что такой пользователь есть в инвентори и у него прописан сотовый или личный телефон"
+	exit 30
+fi
+fixMobile=`echo $mobile | sed 's/^\+7/8/' | tr -cd '[:digit:]'`
+echo "Пользователь $sharee найден в инвентори с сотовым $mobile -> $fixMobile"
+
+
+search=`curl -k -s -H "OCS-APIRequest: true" -u $adUser:$adPassword "$ocsUrl/sharees?format=json&lookup=false&itemType=folder&search=$sharee"`
+#echo $search |jq .ocs.data.users
+
+users=`echo $search |jq .ocs.data.exact.users`
+usersCount=`echo $users |jq length`
+if [ -z "$usersCount" ] || [ "$usersCount" -le 0 ]; then
+	users=`echo $search |jq .ocs.data.users`
+	usersCount=`echo $users |jq length`
+fi
+
+if [ -z "$usersCount" ] || [ "$usersCount" -gt 0 ]; then
+	maxUser=$(($usersCount - 1))
+	#echo "maxUser is $maxUser"
+	for i in $(seq 0 $maxUser); do
+		#echo "iteration $i"
+		#echo $users |jq .[$i]
+		testUser=`echo $users |jq .[$i]`
+		userLabel=`echo $testUser | jq .label | grep "($sharee)"`
+		#echo $userLabel
+		if [ -n "$userLabel" ]; then
+			userId=`echo $testUser | jq -r .value.shareWith`
+			userEmail=`echo $testUser | jq .shareWithDisplayNameUnique`
+		fi
+	done
+fi
+
+if [ -z "$userId" ]; then
+	echo "Не удалось найти пользователя $sharee в Nextcloud. Не могу отправить ему конфиг"
+	echo $search |jq .ocs
+	exit 10
+else 
+	echo "Пользователь $sharee найден в Nextcloud с UUID=$userId"
+fi
+
+#if [ -z "$userEmail" ]; then
+#	echo "У пользователя $sharee в Nextcloud отсутствует e-mail. Не могу отправить ему конфиг"
+#	exit 20
+#fi
+
+
+#echo "Конфиг будет отправлен пользоватею $userLabel, на адрес $userEmail"
+#echo "Для отмены нажмите Ctrl+C"
+#for i in {5..1}; do
+#	echo "Отпрвка через $i секунд..."
+#	sleep 1
+#done
+curl -k -s -H "OCS-APIRequest: true" -d "path=/openvpn/$1&shareType=0&shareWith=$userId" -u $adUser:$adPassword $ocsUrl/shares > /dev/null
+echo "Config share - Готово"
+
+pass=`cat $pwdfile`
+echo "СМС с паролем на конфиг ($pass) будет отправлена пользоватею $userLabel, на номер $fixMobile"
+echo "Для отмены нажмите Ctrl+C"
+for i in {5..1}; do
+	echo "Отпрвка через $i секунд..."
+	sleep 1
+done
+curl -k -s -G --data-urlencode "text=пароль на openvpn $pass" "$smsApiUrl/$fixMobile" 
+#> /dev/null
+echo "Готово"
+
+if [ $used2fa -eq 0 ]; then
+	echo "2FA не используется. Ключ от Гугл атунтификатора не отправляем"
+	exit 0
+fi
+
+pass=`cat $goofile | head -n 1`
+echo "СМС с ключом Google ($pass) будет отправлена пользоватею $userLabel, на номер $fixMobile"
+echo "Для отмены нажмите Ctrl+C"
+for i in {5..1}; do
+	echo "Отпрвка чере $i секунд..."
+	sleep 1
+done
+curl -k -s -G --data-urlencode "text=Ключ Google $pass" "$smsApiUrl/$fixMobile" 
+ #> /dev/null
+echo "Готово"

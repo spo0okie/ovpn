@@ -1,0 +1,81 @@
+#!/bin/bash
+
+#declare -g inventoryDataReqDebug="on lib init"
+
+#обменяться данными с инвентори
+# $1 - контроллер/метод net-ips/search
+# $2 - данные text_addr=192.168.0.1
+# $3 - метод GET
+function inventoryDataReq() {
+	reqPath=$1
+	data=$2
+	method=${3:-GET}
+	if [ "$method" == "GET" ]; then
+		#>&2 echo curl --insecure -s "$inventoryApiUrl/$reqPath?$data"
+		curl --insecure -s "$inventoryApiUrl/$reqPath?$data"
+	else
+		#>&2 echo curl --insecure -H "Content-Type: multipart/form-data;" -d "$data" -X $method -s $inventoryApiUrl/$reqPath
+		curl --insecure -H "Content-Type: multipart/form-data;" -d "$data" -X $method -s $inventoryApiUrl/$reqPath
+	fi
+}
+
+#возвращает первый неиспользованный IP адрес из сети $1
+function inventoryGetUnusedIp() {
+	invData=`inventoryDataReq net-ips/first-unused text_addr=$1`
+	echo $invData | jq -r .text_addr
+}
+
+#найти IP привязанный к конфигу $1 (с нужным префиксом ovpn-pupkin, т.к. такое имя должно быть закреплено за IP)
+function inventoryGetPinnedIp() {
+	invData=`inventoryDataReq net-ips/search name=$1`
+	echo $invData | jq -r .text_addr
+}
+
+#прописать ползователю $1 ip адресс $2
+function inventoryAttachUserIp() {
+	invUser=`inventoryDataReq users/search login=$1`
+	userid=`echo $invUser|jq -r .id`
+	ips=`echo $invUser|jq -r .ips`
+	user=`echo $invUser|jq -r .Login`
+
+	if [ "$1" != "$user" ]; then
+		echo "Пользователь $1 не найден"
+		return 0
+	fi
+
+	#echo $invUser
+
+	if echo "$ips" | grep -q "$2"; then
+		echo "IP $2 уже закреплен за пользователем $1"
+		return 0
+	else
+		if [ "$ips" == "null" ] ; then
+			ips=$2
+		else
+			ips="$ips
+$2"
+		fi
+		inventoryDataReq users/$userid "ips=$ips" PUT >>/dev/null
+		echo "IP $2 закреплен за пользователем $1"
+	fi
+}
+
+#выставить адресу $1 имя $2 (закрепить конфиг за адресом)
+function inventorySetIpInfo() {
+	invData=`inventoryDataReq net-ips/search addr=$1`
+	#echo $invData
+	id=`echo $invData | jq -r .id`
+	#echo "ID: $id"
+	if [ "$id" == "null" ]; then
+		inventoryDataReq net-ips/create "text_addr=$1&name=$2" POST >>/dev/null
+		echo "IP $1 закреплен за конфигом $2"
+	else
+		name=`echo $invData | jq -r .name`
+		if [ "$2" == "$name" ]; then
+			echo "IP $1 уже закреплен за конфигом $2"
+		else 
+			inventoryDataReq net-ips/$id "name=$2" PUT >>/dev/null
+			echo "IP $1 переименован на конфиг $2"
+		fi
+	fi
+}

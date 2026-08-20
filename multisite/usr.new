@@ -1,0 +1,40 @@
+#!/bin/bash
+
+if [ -z "$1" ]; then
+    echo "No username given"
+    exit
+fi
+
+SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )" #"
+. $SCRIPTPATH/_config
+
+userdir=clients/$prefix-$1
+
+mkdir -p $userdir
+
+header="#!/bin/bash"
+
+echo -e "$header\n$SCRIPTPATH/usr.generate $1 \$*" > $userdir/_generate
+chmod 755 $userdir/_generate
+
+echo -e "$header\n$SCRIPTPATH/usr.send $1 \$*" > $userdir/_send
+chmod 755 $userdir/_send
+
+echo -e "$header\n$SCRIPTPATH/usr.push $1 \$*" > $userdir/_push
+chmod 755 $userdir/_push
+
+echo -e "$header\n$SCRIPTPATH/usr.pull $1 \$*" > $userdir/_pull
+chmod 755 $userdir/_pull
+
+echo -e "$header\n$SCRIPTPATH/usr.disable $1 \$*" > $userdir/_disable
+chmod 755 $userdir/_disable
+
+echo -e "$header\n$SCRIPTPATH/usr.enable $1 \$*" > $userdir/_enable
+chmod 755 $userdir/_enable
+
+if [ -n "$2" ]; then
+	$SCRIPTPATH/usr.gen.ccd $1 $2
+	$SCRIPTPATH/usr.generate $1
+fi
+
+echo "Готово"

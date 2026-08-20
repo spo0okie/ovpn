@@ -1,0 +1,44 @@
+#!/bin/bash
+
+#скрипт закрепляет в инвентори IP адреса из CCD за конфигами и за пользователем
+# $1 - имя конфига
+
+if [ -z "$1" ]; then
+    echo "No username given"
+    exit
+fi
+
+SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )" #"
+. $SCRIPTPATH/_config
+. $SCRIPTPATH/_lib
+. $SCRIPTPATH/_lib.inv
+
+
+
+
+if [ -z "$2" ]; then
+    for site in $sites; do
+        $SCRIPTPATH/usr.push.inv $1 $site
+    done
+    exit
+fi
+site=$2
+
+user=`getConfigUser $1`
+ccd=$(getConfigCcd $1 $2)
+mode=`$SCRIPTPATH/_ccd.check $1 $site 1`
+ip=`getCcdIp $ccd 1`
+
+#если адрес есть
+if [ -n "$ip" ]; then
+	if [ "$mode" = "OVPN" ]; then
+		inventorySetIpInfo $ip ovpn-$1
+		inventoryAttachUserIp $user $ip
+	elif [ "$mode" = "OVPN2FA" ]; then
+		non2fa=`2faToNormalIp $ip $site`
+		inventorySetIpInfo $ip ovpn2fa-$1
+		inventorySetIpInfo $non2fa ovpn-$1
+		inventoryAttachUserIp $user $non2fa
+	fi
+fi
+

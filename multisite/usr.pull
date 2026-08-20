@@ -1,0 +1,42 @@
+#!/bin/bash
+#получить CCD файлы с удаленных серверов
+if [ -z "$1" ]; then
+    echo "No username given"
+    exit
+fi
+
+SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )" #"
+. $SCRIPTPATH/_config
+
+userdir=$SCRIPTPATH/clients/$prefix-$1
+goofile=$userdir/google.txt
+
+for site in $sites; do
+	server=${site}${sshpostfix}
+	ccd=$userdir/ccd.$site
+	goo=$userdir/google.txt
+	ccdOFF=$userdir/ccd.$site.OFF
+
+	goofile="$remoteGauthDir/$1/.google_auth"
+	ccdfile="$remoteCcdDir/$1"
+	ccdfileOFF="$remoteCcdDir/$1"
+
+	echo "Проверяю клиента на сервере $site"
+	if [ ! -f "$goo" ]; then
+		goodata=`ssh -i $rsynckeyfile root@$server "test -f $goofile && cat $goofile"`
+		[ -n "$goodata" ] && echo "$goodata" > $goo
+	fi
+	ccddata=`ssh -i $rsynckeyfile root@$server "test -f $ccdfile && cat $ccdfile"`
+	ccddataOFF=`ssh -i $rsynckeyfile root@$server "test -f $ccdfileOFF && cat $ccdfileOFF"`
+
+	if [ -n "$ccddata" ]; then
+		echo "$1 ВКЛЮЧЕН на сервере $site"
+		echo "$ccddata"
+		[ ! -f "$ccd" ] && echo "$ccddata" > $ccd
+	elif [ -n "$ccddataOFF" ]; then
+		echo "$1 ВЫКЛЮЧЕН на сервере $site"
+		echo "$ccddataOFF" > $ccdOFF
+		[ ! -f "$ccd" ] && echo "$ccddataOFF" > $ccdOFF
+	fi
+done
+

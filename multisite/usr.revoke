@@ -1,0 +1,57 @@
+#!/bin/bash
+
+if [ -z "$1" ]; then
+	echo "Usage: $0 <username|list>"
+	echo "username - Name of user to revoke cert"
+	echo "list     - Show list of currently revoked users"
+	exit
+fi
+
+SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )" #"
+. $SCRIPTPATH/_config
+
+function showcrl() {
+	openssl crl -noout -text -in ./crl/crl.pem
+}
+
+if [ "$1" == "list" ]; then
+	showcrl
+	exit
+fi
+
+cert=`./_list.sh $1` #ищем серт пользователя
+
+if [ -z "$cert" ]; then
+	#cat ./clients/${prefix}-$1/${prefix}_$1.crt
+	echo "User $1 not found or revoked already"
+	exit 10
+fi
+
+./usr.show $1
+
+echo "WARINNG: user $1 certificate will be revoked!"
+echo "Press Ctrl+C to abort..."
+waittime="5 4 3 2 1 0"
+#waittime="NOREMORSE"
+for t in $waittime; do
+    echo $t
+    sleep 2
+done
+
+if [ ! -d ./clients/revoked ]; then
+	mkdir ./clients/revoked
+fi
+
+if [ ! -d ./certs/revoked ]; then
+	mkdir ./certs/revoked
+fi
+
+echo "Revoking $1"
+
+openssl ca -revoke $cert -config $sslconf #&& \
+mv $cert ./certs/revoked && \
+mv ./clients/${prefix}-$1 ./clients/revoked
+
+openssl ca -gencrl -out ./crl/crl.pem -config $sslconf
+
+showcrl

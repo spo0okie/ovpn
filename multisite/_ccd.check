@@ -1,0 +1,89 @@
+#!/bin/bash
+#задача скрипта
+#определить пользователь $1 в сайте $2 имеет конфиг с 2FA или нет
+#(определяется на основании подсети в которой пользователю выдан адрес)
+#в случае если есть третий параметр - проверяет в т.ч. отключенный CCD
+
+# !!! РАБОТАЕТ ТОЛЬКО ДЛЯ ПОДСЕТЕЙ /24 !!!
+
+if [ -z "$1" ]; then
+    echo "No username given"
+    exit
+fi
+
+if [ -z "$2" ]; then
+    echo "No sitename given"
+    exit
+fi
+
+SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )" #"
+. $SCRIPTPATH/_config
+. $SCRIPTPATH/_lib
+. $SCRIPTPATH/_lib.inv
+
+userdir=$SCRIPTPATH/clients/$prefix-$1
+
+site=$2
+ccd=$userdir/ccd.${site}
+
+#проверяем отключенный CCD если есть третий параметр
+if [ -n "$3" ]; then
+	if [ -s $ccd.disabled ]; then
+		ccd=$ccd.disabled
+	fi
+fi
+
+user=`echo $1|cut -d- -f1`
+
+
+#если предоставляется ли доступ к площадке $site
+if [ -e $ccd ]; then
+	#получаем из CCD адрес конфига из строки ifconfig-push
+	network=`grep -vE '^#' $ccd | grep 'ifconfig-push' | head -n 1 | cut -d' ' -f2`
+	#если адрес есть
+	if [ -n "$network" ]; then
+		#вытаскиваем первые три октета подсети из адреса
+		subnet=`echo $network | cut -d'.' -f1-3`
+		if [ -n "$subnet" ]; then
+			#вытаскиваем три октета не 2ФА овпн сети сайта
+			site_ovpn_lan_var=${site}_openvpn_lan
+			site_ovpn_lan=${!site_ovpn_lan_var}
+			site_subnet=`echo $site_ovpn_lan | cut -d'.' -f1-3`
+			#если адрес в ней (первые три октета адреса и сети одинаковые)
+			if [ "$site_subnet" = "$subnet" ]; then
+				echo "OVPN"
+				exit 0
+			else
+				#формируем переменную 2ФА сети
+				site_ovpn2fa_lan_var=${site}_openvpn2fa_lan
+				site_ovpn2fa_lan=${!site_ovpn2fa_lan_var}
+				#есть такая переменная?
+				if [ -n "$site_ovpn2fa_lan" ]; then
+					#получам первые 3 октета 2ФА сети
+					site_2fasubnet=`echo $site_ovpn2fa_lan | cut -d'.' -f1-3`
+					#адрес в сети 2ФА
+					if [ "$site_2fasubnet" = "$subnet" ]; then
+						echo "OVPN2FA"
+						exit 0
+					else
+						echo "$network из файла $ccd не относится ни к openvpn-mobile, ни к openvpn-mobile2fa сети. Что за IP там прописан?"
+						exit 10
+					fi
+				else
+					echo "$network из файла $ccd не относится ни к openvpn-mobile, но у сайта $site нет openvpn-mobile2fa сети. Что за IP там прописан?"
+					exit 10
+				fi
+			fi
+		else
+			echo "Не могу распарсить IP адрес $network из $ccd"
+			exit 10
+		fi
+	else
+		echo "Не могу найти настройку IP адреса из $ccd"
+		exit 10
+	fi
+else
+	echo "NONE"
+	exit 0
+fi
+
