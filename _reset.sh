@@ -2,6 +2,18 @@
 
 SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )" #"
 . $SCRIPTPATH/_config
+. $SCRIPTPATH/_lib
+
+#сеть в формате "адрес маска": 10.0.0.0/24 -> "10.0.0.0 255.255.255.0"
+#адрес без суффикса получает маску /24 (историческое поведение)
+function netAndMask() {
+	m=`suffix2mask $1`
+	if [ "$m" == "$1" ]; then
+		echo "$1 255.255.255.0"
+	else
+		echo "$m"
+	fi
+}
 
 
 echo "WARINNG NOW RESETING OPENVPN SERVER CERTIFICATES ($org/$prefix $srvname/$srvaddr)"
@@ -62,7 +74,7 @@ echo "crl-verify $ovpndir/clients/revoked.crl" >> $conf
 echo "tls-server" >> $conf
 echo "cipher AES-256-CBC" >> $conf
 echo "data-ciphers AES-256-CBC" >> $conf
-echo "server $vpnnet 255.255.255.0" >> $conf
+echo "server `netAndMask $vpnnet`" >> $conf
 echo "topology subnet" >> $conf
 echo "persist-key" >> $conf
 echo "persist-tun" >> $conf
@@ -79,10 +91,10 @@ echo "script-security 2" >> $conf
 echo ";link-mtu 1472" >> $conf
 echo "keepalive 10 60" >> $conf
 
-echo "push \"route $vpnnet 255.255.255.0\"" >> $conf
+echo "push \"route `netAndMask $vpnnet`\"" >> $conf
 
 for netw in $subnets; do
-    echo "push \"route $netw 255.255.255.0\"" >> $conf
+    echo "push \"route `netAndMask $netw`\"" >> $conf
 done
 
 for ns in $dns; do
