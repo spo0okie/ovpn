@@ -33,4 +33,6 @@ ovpndir=/etc/openvpn/server
 sslconf=$ovpndir/openssl.cnf
 
 #если укахзан, то будет хранить адреса пользователей в инвентори
+#если инвентори требует авторизацию - логин/пароль указываются прямо в URL
+#inventoryApiUrl=https://user:password@inventory.sampleOrg.local/web/api
 inventoryApiUrl=https://inventory.sampleOrg.local/web/api

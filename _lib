@@ -44,7 +44,7 @@ function inventoryGetUnusedIp() {
 	addr=`echo $invData | jq -r .text_addr`
 
 	if [ "$addr" == "null" ]; then
-		&>2 echo "ERR fetching addr: $inventoryApiUrl/net-ips/first-unused?text_addr=$vpnnet"
+		>&2 echo "ERR fetching addr: $inventoryApiUrl/net-ips/first-unused?text_addr=$vpnnet"
 		exit 10
 	fi
 

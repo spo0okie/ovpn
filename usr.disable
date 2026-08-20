@@ -11,7 +11,7 @@ SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )" #"
 
 userdir=$ovpndir/clients/$prefix-$1
 ccdln=$ovpndir/ccd/$1
-
+ccd=$userdir/ccd
 
 if [ -f $ccdln ]; then
 	echo "removing CCD link $ccd -> $ccdln"

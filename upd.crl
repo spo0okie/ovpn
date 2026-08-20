@@ -1,6 +1,7 @@
 #!/bin/bash
 
-. ./_config
+SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )" #"
+. $SCRIPTPATH/_config
 
-openssl ca -gencrl -keyfile ./ca.key -cert ./ca.pem -crldays 720 -out ./clients/revoked.crl -config $sslconf
+openssl ca -gencrl -keyfile $ovpndir/ca.key -cert $ovpndir/ca.pem -crldays 720 -out $ovpndir/clients/revoked.crl -config $sslconf
 

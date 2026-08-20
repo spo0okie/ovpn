@@ -13,7 +13,7 @@ SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )" #"
 
 #прописать ползователю $1 ip адресс $2
 function attachUserIp() {
-	invUser=`curl -k -s $inventoryApiUrl/users/view?login=$1`
+	invUser=`curl -k -s $inventoryApiUrl/users/search?login=$1`
 	userid=`echo $invUser|jq -r .id`
 	ips=`echo $invUser|jq -r .ips`
 	user=`echo $invUser|jq -r .Login`
@@ -36,7 +36,7 @@ function attachUserIp() {
 			ips="$ips
 $2"
 		fi
-		curl -s -d "ips=$ips" -X PUT $inventoryApiUrl/users/$userid >>/dev/null
+		curl -k -s -d "ips=$ips" -X PUT $inventoryApiUrl/users/$userid >>/dev/null
 	fi
 }
 
@@ -162,8 +162,8 @@ fi
 if [ -n "$inventoryApiUrl" ]; then
 	ip=`grep -vE '^#' $ccd | grep 'ifconfig-push' | head -n 1 | cut -d' ' -f2`
 	if [ -n "$ip" ]; then
-		curl -s -d "text_addr=$ip&name=ovpn-$1" -X POST $inventoryApiUrl/net-ips/create >>/dev/null
-		curl -s -d "text_addr=$ip&name=ovpn-$1" -X PUT  $inventoryApiUrl/net-ips/upate >>/dev/null
+		curl -k -s -d "text_addr=$ip&name=ovpn-$1" -X POST $inventoryApiUrl/net-ips/create >>/dev/null
+		curl -k -s -d "text_addr=$ip&name=ovpn-$1" -X PUT  $inventoryApiUrl/net-ips/update >>/dev/null
 		attachUserIp $1 $ip
 	fi
 fi
