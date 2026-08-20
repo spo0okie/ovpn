@@ -65,6 +65,7 @@ keyfile=$userdir/${prefix}_$1.key
 certfile=$userdir/${prefix}_$1.crt
 csrfile=$userdir/${prefix}_$1.csr
 CONF=$userdir/${prefix}_$1.ovpn
+goofile=$userdir/google.txt
 ccd=$userdir/ccd
 
 mkdir -p $userdir
@@ -209,6 +210,25 @@ if [ -n "$inventoryApiUrl" ]; then
 		curl -k -s -d "text_addr=$ip&name=ovpn-$1" -X POST $inventoryApiUrl/net-ips/create >>/dev/null
 		curl -k -s -d "text_addr=$ip&name=ovpn-$1" -X PUT  $inventoryApiUrl/net-ips/update >>/dev/null
 		attachUserIp $1 $ip
+	fi
+fi
+
+#генерация секрета Google Authenticator (2FA), включается флагом use2fa=1 в _config
+if [ "$use2fa" = "1" ]; then
+	if [ -s $goofile ]; then
+		echo "Файл Google-auth - ОК (уже есть)"
+	else
+		# -t --time-based
+		# -f --force
+		# -r --rate-limit=5 - не больше 5 попыток
+		# -R --rate-time=30 - за каждые 60 секунд
+		# -w --windows-size - разрешить входить по 5 предыдущим и 5 следующим ключам
+		# -S --step-size=60 - новый ключ каждые 60 секунд
+		# -Q --qr-mode=none - не выводить QR код
+		# -D --allow-reuse  - разрешить 2 раза входить по одному и тому же ключу
+		# -q --quiet
+		google-authenticator -f -t -r 3 -R 30 -w 5 -Q none -D -q --secret=$goofile
+		echo "Файл Google-auth - ОК"
 	fi
 fi
 

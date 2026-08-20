@@ -37,6 +37,11 @@ subnets="192.168.77.0/24 172.20.0.0/16"
 #which dns servers to push
 dns="192.168.77.2 172.20.20.2"
 
+#2FA: use2fa=1 включает генерацию секрета Google Authenticator
+#(google.txt в папке клиента) при создании пользователя.
+#требует установленного google-authenticator (libpam-google-authenticator)
+#use2fa=0
+
 ovpndir=/etc/openvpn/server
 
 sslconf=$ovpndir/openssl.cnf
