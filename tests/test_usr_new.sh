@@ -147,4 +147,29 @@ echo "SECRET_KEEP" > $userdir/google.txt
 runUsrNew u8
 assertFileContains "повторный запуск не перегенерирует секрет" $userdir/google.txt "SECRET_KEEP"
 
+echo "usePassKey=1: генерируется файл пароля:"
+deployBase
+makeUser u9
+echo "usePassKey=1" >> $ovpn/_config
+curlRoute "net-ips/search?name=ovpn-u9" '{"text_addr":"10.64.68.5"}'
+runUsrNew u9
+assertExitCode "успешное завершение" "0" "$rc"
+assertFileExists "passwd.txt создан" $userdir/passwd.txt
+assertEquals "пароль из 13 символов" "13" "$(tr -d '
+' < $userdir/passwd.txt | wc -c | tr -d ' ')"
+echo "KEEPPASS" > $userdir/passwd.txt
+runUsrNew u9
+assertFileContains "повторный запуск не меняет пароль" $userdir/passwd.txt "KEEPPASS"
+
+echo "makeConnectConf=1: дополнительный конфиг для OpenVPN Connect:"
+deployBase
+makeUser u10
+echo "makeConnectConf=1" >> $ovpn/_config
+curlRoute "net-ips/search?name=ovpn-u10" '{"text_addr":"10.64.68.5"}'
+runUsrNew u10
+assertExitCode "успешное завершение" "0" "$rc"
+assertFileContains "remote одной строкой" $userdir/tst_u10_connect.ovpn "remote vpn.test.local 1194 udp"
+assertFileContains "сертификат вложен" $userdir/tst_u10_connect.ovpn "FAKE CERT"
+assertFileNotContains "без key-direction (сервер двунаправленный)" $userdir/tst_u10_connect.ovpn "key-direction"
+
 summarize

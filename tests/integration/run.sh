@@ -149,6 +149,29 @@ cli $INSIDE/connect.sh /shared/tst_mass01.ovpn success "172.21.0.0/16"
 assertExitCode "клиенту пушится добавленный маршрут" "0" "$?"
 
 
+echo "== 6. Опциональные фичи генерации (usePassKey, makeConnectConf)"
+srv "printf 'usePassKey=1
+makeConnectConf=1
+' >> /etc/openvpn/_config"
+srv "cd /etc/openvpn && ./usr.new secure1 >/dev/null && ./usr.enable secure1 >/dev/null"
+assertExitCode "usr.new с паролем на ключ" "0" "$?"
+
+srv "grep -q ENCRYPTED /etc/openvpn/clients/tst-secure1/tst_secure1.key"
+assertExitCode "приватный ключ зашифрован" "0" "$?"
+
+srv "cd /etc/openvpn/clients/tst-secure1 && openssl rsa -in tst_secure1.key -passin file:passwd.txt -noout"
+assertExitCode "ключ читается паролем из passwd.txt" "0" "$?"
+
+srv "cp /etc/openvpn/clients/tst-secure1/tst_secure1.ovpn /etc/openvpn/clients/tst-secure1/tst_secure1_connect.ovpn /shared/ && cp /etc/openvpn/clients/tst-secure1/passwd.txt /shared/secure1.pass"
+cli $INSIDE/connect.sh /shared/tst_secure1.ovpn success "" /shared/secure1.pass
+assertExitCode "туннель с зашифрованным ключом (askpass)" "0" "$?"
+
+cli $INSIDE/connect.sh /shared/tst_secure1_connect.ovpn success "" /shared/secure1.pass
+assertExitCode "конфиг для OpenVPN Connect поднимает туннель" "0" "$?"
+
+srv "sed -i '/usePassKey/d;/makeConnectConf/d' /etc/openvpn/_config"
+
+
 if [ "$WITH_INVENTORY" == "1" ]; then
 	echo "== 8. Интеграция с настоящей инвентори (arms)"
 	srv "bash $INSIDE/seed-inventory.sh"

@@ -38,11 +38,35 @@ ccd=$userdir/ccd
 
 mkdir -p $userdir
 
+#пароль на приватный ключ (usePassKey=1 в _config)
+if [ "$usePassKey" = "1" ]; then
+	pwdfile=$userdir/passwd.txt
+	if [ -s $pwdfile ]; then
+		echo "password file already exists"
+	else
+		echo "generating password file"
+		passLetters=${passLetters:-"abcdefghjkmnopqrstuvwxyzABCDEFJHJKLMNPQRSTUVWXYZ23456789"}
+		pass=""
+		for i in {1..13}; do
+			pass="${pass}${passLetters:RANDOM%${#passLetters}:1}"
+		done
+		echo $pass > $pwdfile
+		chmod 600 $pwdfile
+	fi
+	passinOpt="-passin file:$pwdfile"
+else
+	passinOpt=""
+fi
+
 if [ -s $keyfile ]; then
 	echo "keyfile already exists"
 else
 	echo "generatating keyfile"
-	openssl genrsa -out $keyfile
+	if [ "$usePassKey" = "1" ]; then
+		openssl genrsa -aes256 -out $keyfile -passout file:$pwdfile
+	else
+		openssl genrsa -out $keyfile
+	fi
 fi
 
 if [ -s $certfile ]; then
@@ -52,7 +76,7 @@ else
 		echo "cert request file already exists"
 	else
 		echo "generating cert request"
-		echo -e "RU\nUral\nChel\n$org\nIT\n$1\n\n\n" |openssl req -config $sslconf -new -nodes -key $keyfile -out $csrfile
+		echo -e "RU\nUral\nChel\n$org\nIT\n$1\n\n\n" |openssl req -config $sslconf -new -nodes -key $keyfile $passinOpt -out $csrfile
 	fi
 	echo "generating cert file"
 	openssl ca -batch -in $csrfile -out $certfile  -config $sslconf
@@ -93,6 +117,40 @@ else
 	#echo "mssfix 1400"			>>$CONF
 	#echo "comp-lzo"				>>$CONF
 	cp $CONF $userdir/${prefix}_$1.conf
+fi
+
+#дополнительный конфиг для OpenVPN Connect (makeConnectConf=1 в _config):
+#remote одной строкой с портом и протоколом; tls-auth без key-direction,
+#как и в основном конфиге (сервер базового варианта - двунаправленный)
+CONNCONF=$userdir/${prefix}_$1_connect.ovpn
+if [ "$makeConnectConf" = "1" ]; then
+	if [ -s $CONNCONF ]; then
+		echo "connect conf already exists"
+	else
+		>$CONNCONF
+		echo "client"						>>$CONNCONF
+		echo "dev tun"						>>$CONNCONF
+		echo "remote $srvaddr $port $proto"	>>$CONNCONF
+		echo "tls-client"					>>$CONNCONF
+		echo "nobind"						>>$CONNCONF
+		echo "cipher $cipher"				>>$CONNCONF
+		echo "data-ciphers $cipher"			>>$CONNCONF
+		echo "resolv-retry infinite"		>>$CONNCONF
+		echo "persist-key"					>>$CONNCONF
+		echo "persist-tun"					>>$CONNCONF
+		echo "<ca>"							>>$CONNCONF
+		cat $ovpndir/ca.pem					>>$CONNCONF
+		echo "</ca>"						>>$CONNCONF
+		echo "<cert>"						>>$CONNCONF
+		cat $certfile						>>$CONNCONF
+		echo "</cert>"						>>$CONNCONF
+		echo "<key>"						>>$CONNCONF
+		cat $keyfile						>>$CONNCONF
+		echo "</key>"						>>$CONNCONF
+		echo "<tls-auth>"					>>$CONNCONF
+		cat $ovpndir/ta.key					>>$CONNCONF
+		echo "</tls-auth>"					>>$CONNCONF
+	fi
 fi
 
 

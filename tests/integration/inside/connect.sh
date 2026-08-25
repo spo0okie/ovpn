@@ -8,6 +8,7 @@
 config=$1
 expect=$2
 wantline=$3
+askpass=$4	#файл с паролем ключа (для usePassKey-конфигов)
 log=/tmp/client.log
 timeout=${CONNECT_TIMEOUT:-30}
 
@@ -15,7 +16,9 @@ rm -f $log
 pkill -f "openvpn --config" 2>/dev/null
 sleep 1
 
-openvpn --config "$config" --log "$log" --verb 3 --connect-retry-max 3 &
+extra=""
+[ -n "$askpass" ] && extra="--askpass $askpass"
+openvpn --config "$config" --log "$log" --verb 3 --connect-retry-max 3 $extra &
 pid=$!
 
 up=0
