@@ -1,4 +1,8 @@
 #!/bin/bash
+#доставка конфигов пользователю: шара в Nextcloud + пароли/ключи по СМС
+#опциональный модуль: работает при заданных nextcloudUrl (и smsApiUrl - для СМС)
+# $1 - имя конфига
+# $2 - (опционально) логин получателя, если отличается от имени конфига
 
 if [ -z "$1" ]; then
     echo "No username given"
@@ -7,18 +11,19 @@ fi
 
 SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )" #"
 . $SCRIPTPATH/_config
+. $SCRIPTPATH/_lib
 
-$SCRIPTPATH/usr.push.inv $1
+if [ -z "$nextcloudUrl" ]; then
+	echo "nextcloudUrl не задан в _config - доставка конфигов не настроена"
+	exit 1
+fi
 
+#синхронизация с инвентори перед отправкой (есть только в мультисайте)
+[ -x $SCRIPTPATH/usr.push.inv ] && $SCRIPTPATH/usr.push.inv $1
 
-userdir=$SCRIPTPATH/clients/$prefix-$1
-keyfile=$userdir/${prefix}_$1.key
-certfile=$userdir/${prefix}_$1.crt
-csrfile=$userdir/${prefix}_$1.csr
+userdir=$(getConfigDir $1)
 pwdfile=$userdir/passwd.txt
 goofile=$userdir/google.txt
-
-mkdir -p $userdir
 
 #путь к файлохранилищу vpnBot
 apiUrl=$nextcloudUrl/remote.php/dav/files/$nextCloudUID
@@ -26,43 +31,25 @@ apiUrl=$nextcloudUrl/remote.php/dav/files/$nextCloudUID
 curl -k -s -u $adUser:$adPassword -X MKCOL $apiUrl/openvpn >> /dev/null
 curl -k -s -u $adUser:$adPassword -X MKCOL $apiUrl/openvpn/$1 >> /dev/null
 
-curl -k --netrc -s -S -u $adUser:$adPassword -X PUT "$apiUrl/openvpn/$1/инструкция.pdf" -T "$SCRIPTPATH/send_files/инструкция.pdf"
-curl -k --netrc -s -S -u $adUser:$adPassword -X PUT "$apiUrl/openvpn/$1/инструкция_connect.pdf" -T "$SCRIPTPATH/send_files/инструкция_connect.pdf"
- #>> /dev/null
-# curl -k --netrc -s -S -u $adUser:$adPassword -X PUT "$apiUrl/openvpn/$1/инструкция (дополнительно).pdf" -T "$SCRIPTPATH/send_files/инструкция2.pdf"
-#>> /dev/null
-
-used2fa=0
-
-for site in $sites; do
-
-	ovpn=${prefix}_${1}_${site}.ovpn
-	ovpncon=${prefix}_${1}_${site}_connect.ovpn
-	ovpn2fa=${prefix}_${1}_${site}_2fa.ovpn
-	ovpn2facon=${prefix}_${1}_${site}_2fa_connect.ovpn
-
-
-	site_mode=`$SCRIPTPATH/_ccd.check $1 $site`
-	#echo "$site_mode"
-	case "$site_mode" in
-		OVPN)
-			echo "Доступ к $site предоставляется без 2FA (Закидываю соотв конфиг в NEXTCLOUD)"
-			curl -k -s -u $adUser:$adPassword -X PUT $apiUrl/openvpn/$1/$ovpn --data-binary @$userdir/$ovpn >> /dev/null
-			curl -k -s -u $adUser:$adPassword -X PUT $apiUrl/openvpn/$1/$ovpncon --data-binary @$userdir/$ovpncon >> /dev/null
-		;;
-		OVPN2FA)
-			echo "Доступ к $site предоставляется через 2FA (Закидываю соотв конфиг в NEXTCLOUD)"
-			curl -k -s -u $adUser:$adPassword -X PUT $apiUrl/openvpn/$1/$ovpn2fa --data-binary @$userdir/$ovpn2fa >> /dev/null
-			curl -k -s -u $adUser:$adPassword -X PUT $apiUrl/openvpn/$1/$ovpn2facon --data-binary @$userdir/$ovpn2facon >> /dev/null
-			used2fa=1
-		;;
-		NONE)
-		;;
-		*)
-			echo $site_mode
-		;;
-	esac
+#инструкции для пользователя (если приложены в send_files/)
+for doc in $SCRIPTPATH/send_files/*; do
+	[ -e "$doc" ] || continue
+	curl -k -s -S -u $adUser:$adPassword -X PUT "$apiUrl/openvpn/$1/$(basename "$doc")" -T "$doc"
 done
+
+#все сгенерированные конфиги пользователя (usr.generate мультисайта сам
+#удаляет неактуальные варианты, так что в папке только нужные)
+found=0
+for conf in $userdir/*.ovpn; do
+	[ -e "$conf" ] || continue
+	echo "Закидываю $(basename $conf) в NEXTCLOUD"
+	curl -k -s -u $adUser:$adPassword -X PUT $apiUrl/openvpn/$1/$(basename $conf) --data-binary @$conf >> /dev/null
+	found=1
+done
+if [ $found -eq 0 ]; then
+	echo "У пользователя $1 нет ни одного .ovpn конфига - нечего отправлять"
+	exit 11
+fi
 
 curl -k -s -u $adUser:$adPassword -H "Accept: application/json" -X PROPFIND $apiUrl/openvpn/$1 | sed 's/<\/*d:href>/\n/g' | grep remote.php | cut -d'/' -f8 | grep -v '^$' > $userdir/nextcloud.txt
 filesCount=`cat $userdir/nextcloud.txt | wc -l`
@@ -81,18 +68,21 @@ else
 	sharee=$1
 fi
 
-invUser=`curl -k -s $inventoryApiUrl/users/search?login=$sharee&expand=private_phone`
-mobile=`echo $invUser|jq -r .Mobile`
-if [ "$mobile" == "null" ] || [ -z "$mobile" ] ; then
-	mobile=`echo $invUser|jq -r .private_phone`
+#телефон нужен только для СМС
+if [ -n "$smsApiUrl" ]; then
+	invUser=`curl -k -s "$inventoryApiUrl/users/search?login=$sharee&expand=private_phone"`
+	mobile=`echo $invUser|jq -r .Mobile`
+	if [ "$mobile" == "null" ] || [ -z "$mobile" ] ; then
+		mobile=`echo $invUser|jq -r .private_phone`
+	fi
+	if [ "$mobile" == "null" ] || [ -z "$mobile" ] ; then
+		echo "не могу найти сотовый для пользователя $sharee - отправка СМС невозможна"
+		echo "проверь что такой пользователь есть в инвентори и у него прописан сотовый или личный телефон"
+		exit 30
+	fi
+	fixMobile=`echo $mobile | sed 's/^\+7/8/' | tr -cd '[:digit:]'`
+	echo "Пользователь $sharee найден в инвентори с сотовым $mobile -> $fixMobile"
 fi
-if [ "$mobile" == "null" ] || [ -z "$mobile" ] ; then
-	echo "не могу найти сотовый для пользователя $sharee - отправка СМС невозможна"
-	echo "проверь что такой пользователь есть в инвентори и у него прописан сотовый или личный телефон"
-	exit 30
-fi
-fixMobile=`echo $mobile | sed 's/^\+7/8/' | tr -cd '[:digit:]'`
-echo "Пользователь $sharee найден в инвентори с сотовым $mobile -> $fixMobile"
 
 
 search=`curl -k -s -H "OCS-APIRequest: true" -u $adUser:$adPassword "$ocsUrl/sharees?format=json&lookup=false&itemType=folder&search=$sharee"`
@@ -144,6 +134,14 @@ fi
 curl -k -s -H "OCS-APIRequest: true" -d "path=/openvpn/$1&shareType=0&shareWith=$userId" -u $adUser:$adPassword $ocsUrl/shares > /dev/null
 echo "Config share - Готово"
 
+if [ -z "$smsApiUrl" ]; then
+	echo "smsApiUrl не задан в _config - СМС не отправляются (конфиги уже в Nextcloud)"
+	exit 0
+fi
+
+if [ ! -s $pwdfile ]; then
+	echo "Файла с паролем нет (usePassKey не используется) - СМС с паролем не отправляется"
+else
 pass=`cat $pwdfile`
 echo "СМС с паролем на конфиг ($pass) будет отправлена пользоватею $userLabel, на номер $fixMobile"
 echo "Для отмены нажмите Ctrl+C"
@@ -154,8 +152,9 @@ done
 curl -k -s -G --data-urlencode "text=пароль на openvpn $pass" "$smsApiUrl/$fixMobile" 
 #> /dev/null
 echo "Готово"
+fi
 
-if [ $used2fa -eq 0 ]; then
+if [ ! -s $goofile ]; then
 	echo "2FA не используется. Ключ от Гугл атунтификатора не отправляем"
 	exit 0
 fi

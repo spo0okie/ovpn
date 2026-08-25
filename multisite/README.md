@@ -30,7 +30,7 @@
 | `usr.gen.ccd` | **общий** — живет в корне: `usr.gen.ccd <user> <site>` генерирует/обновляет `ccd.<site>` (с миграцией через `previousPushRoutes`/`<site>_previous_openvpn_lan`) |
 | `usr.disable` / `usr.enable` | **заменяют**: переименование `ccd.<site>` ↔ `ccd.<site>.disabled` + push на сайт (в базовом — линк/удаление линка в локальном ccd-каталоге) |
 | `usr.push` / `usr.pull` / `usr.push.inv` | **новые**: синхронизация CCD/2FA-секретов с серверами сайтов и инвентори |
-| `usr.send` | **новый**: доставка конфигов через Nextcloud + СМС |
+| `usr.send` | **общий** — живет в корне: доставка конфигов через Nextcloud + СМС (включается `nextcloudUrl`/`smsApiUrl` в `_config`) |
 | `_ccd.check` | **новый**: определение режима (OVPN / OVPN2FA / NONE) по подсети CCD. Работает только с /24 |
 | `_lib.ms` | **дополняет** корневую `_lib`: конвертация адресов 2FA-подсети, `getConfigUser` |
 | `_lib.inv` | **общий** — живет в корне репозитория, используется обоими вариантами |
@@ -44,8 +44,8 @@ reset для мультисайта нет — серверы сайтов на�
 
 1. Клонируем репозиторий, содержимое `multisite/` кладем в рабочую папку
    (например `/etc/openvpn`), **заменяя** одноименные файлы базового варианта
-   (`_lib`, `_lib.inv`, `usr.show`, `usr.revoke`, `usr.gen.ccd` при этом
-   остаются из корня — они общие).
+   (`_lib`, `_lib.inv`, `usr.show`, `usr.revoke`, `usr.gen.ccd`, `usr.send`
+   при этом остаются из корня — они общие).
 2. `cp _config.sample _config` и заполняем: список `sites`, подсети
    `<site>_openvpn_lan`/`<site>_openvpn2fa_lan` (только /24!), `sshpostfix`,
    `remoteCcdDir`, `remoteGauthDir`, доступы к Nextcloud/СМС-шлюзу/инвентори.

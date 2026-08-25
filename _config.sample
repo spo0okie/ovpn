@@ -57,3 +57,21 @@ sslconf=$ovpndir/openssl.cnf
 #если инвентори требует авторизацию - логин/пароль указываются прямо в URL
 #inventoryApiUrl=https://user:password@inventory.sampleOrg.local/web/api
 inventoryApiUrl=https://inventory.sampleOrg.local/web/api
+
+#пароль на приватный ключ клиента: usePassKey=1 - ключ шифруется (aes256),
+#пароль генерируется в passwd.txt в папке клиента
+#usePassKey=0
+#passLetters="abcdefghjkmnopqrstuvwxyzABCDEFJHJKLMNPQRSTUVWXYZ23456789"
+
+#makeConnectConf=1 - дополнительно генерировать конфиг для OpenVPN Connect
+#(*_connect.ovpn: remote одной строкой с портом и протоколом)
+#makeConnectConf=0
+
+#доставка конфигов пользователям (usr.send): если задан nextcloudUrl -
+#конфиги выкладываются в Nextcloud и шарятся пользователю;
+#если задан и smsApiUrl - пароль ключа и секрет 2FA уходят по СМС
+#nextcloudUrl=https://nextcloud.sampleorg.ru
+#adUser=vpnbot
+#adPassword=SecretPassword
+#nextCloudUID=00000000-0000-0000-0000-000000000000
+#smsApiUrl=https://sms-gw.sampleorg.local:8082/sms/send

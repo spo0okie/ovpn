@@ -36,6 +36,10 @@
 Опции:
 - 2FA: `use2fa=1` — генерация секрета Google Authenticator в папке
   клиента;
+- пароль на приватный ключ: `usePassKey=1` (пароль в `passwd.txt`);
+- конфиг для OpenVPN Connect: `makeConnectConf=1` (`*_connect.ovpn`);
+- доставка конфигов (`usr.send`): шара в Nextcloud + пароль/ключ 2FA по
+  СМС — включается `nextcloudUrl`/`smsApiUrl` в `_config`;
 - мультисайтовый сценарий — [multisite/](multisite/README.md): несколько
   площадок, доставка конфигов через Nextcloud, пароли/ключи по СМС,
   синхронизация серверов сайтов по ssh.
