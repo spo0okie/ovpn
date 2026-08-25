@@ -6,6 +6,19 @@
 
 echo "$@" >> "${CURL_LOG:-/dev/null}"
 
+#сохранить тело -T загрузки для проверок (в $CURL_UPLOADS)
+prev=""
+upfile=""
+for a in "$@"; do
+	[ "$prev" == "-T" ] && upfile=$a
+	prev=$a
+done
+if [ -n "$upfile" ] && [ -n "$CURL_UPLOADS" ] && [ -f "$upfile" ]; then
+	mkdir -p "$CURL_UPLOADS"
+	n=$(ls "$CURL_UPLOADS" 2>/dev/null | wc -l)
+	cp "$upfile" "$CURL_UPLOADS/upload.$n"
+fi
+
 url=""
 for a in "$@"; do
 	case "$a" in

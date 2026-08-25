@@ -75,6 +75,7 @@ function newSandbox() {
 	chmod +x $sandbox/bin/*
 	export PATH=$sandbox/bin:$PATH
 	export CURL_LOG=$sandbox/curl.log
+	export CURL_UPLOADS=$sandbox/uploads
 	export CURL_ROUTES=$sandbox/curl.routes
 	export GAUTH_LOG=$sandbox/gauth.log
 	: > $CURL_LOG

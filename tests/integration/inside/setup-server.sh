@@ -5,7 +5,7 @@ set -e
 
 ovpn=/etc/openvpn
 
-cp /repo/usr.new /repo/usr.gen.ccd /repo/usr.enable /repo/usr.disable /repo/usr.revoke \
+cp /repo/usr.new /repo/usr.gen.ccd /repo/usr.send /repo/usr.enable /repo/usr.disable /repo/usr.revoke \
    /repo/usr.show /repo/_lib /repo/_lib.inv /repo/_reset.sh /repo/_renew.CA.sh \
    /repo/upd.crl /repo/openssl.cnf $ovpn/
 chmod 755 $ovpn/usr.* $ovpn/_reset.sh $ovpn/_renew.CA.sh $ovpn/upd.crl

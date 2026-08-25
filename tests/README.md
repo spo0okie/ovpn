@@ -70,6 +70,7 @@ dhparam 4096, а профиль inventory катит миграции на пу�
 |---|---|---|
 | `server` | debian/alpine + openvpn, openssl, jq, google-authenticator; репозиторий смонтирован в `/etc/openvpn` | здесь выполняются provision-скрипты и поднимается настоящий openvpn-сервер из сгенерированного `server.conf` (`cap_add: NET_ADMIN`, `/dev/net/tun`) |
 | `client` | openvpn | подключается сгенерированным клиентским конфигом к `server`; критерий — `Initialization Sequence Completed` + ping через туннель |
+| `mailpit` | axllent/mailpit | SMTP-приемник для почтовой доставки: сценарий проверяет через его REST API, что письмо дошло и вложение побайтово совпадает с конфигом |
 | `inventory` (опциональный profile) | `spo0okie/inventory:v1` + `mysql:8.0` | проверка реальной выдачи/закрепления IP вместо заглушки curl |
 
 Без profile `inventory` сценарии работают с пустым `inventoryApiUrl`

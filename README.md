@@ -38,8 +38,11 @@
   клиента;
 - пароль на приватный ключ: `usePassKey=1` (пароль в `passwd.txt`);
 - конфиг для OpenVPN Connect: `makeConnectConf=1` (`*_connect.ovpn`);
-- доставка конфигов (`usr.send`): шара в Nextcloud + пароль/ключ 2FA по
-  СМС — включается `nextcloudUrl`/`smsApiUrl` в `_config`;
+- доставка конфигов (`usr.send`): шара в Nextcloud (`nextcloudUrl`) или
+  письмо с вложениями через авторизованный SMTP (`mailSmtpUrl` — когда
+  Nextcloud недоступен снаружи); пароль ключа и код 2FA — вторым
+  каналом по СМС (`smsApiUrl`). При почтовой доставке рекомендуется
+  `usePassKey=1`: перехват письма без СМС с паролем бесполезен;
 - мультисайтовый сценарий — [multisite/](multisite/README.md): несколько
   площадок, доставка конфигов через Nextcloud, пароли/ключи по СМС,
   синхронизация серверов сайтов по ssh.

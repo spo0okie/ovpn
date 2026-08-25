@@ -1,8 +1,12 @@
 #!/bin/bash
-#доставка конфигов пользователю: шара в Nextcloud + пароли/ключи по СМС
-#опциональный модуль: работает при заданных nextcloudUrl (и smsApiUrl - для СМС)
+#доставка конфигов пользователю + пароли/ключи по СМС
+#опциональный модуль, транспорт выбирается по _config:
+# nextcloudUrl - шара в Nextcloud (приоритетный)
+# mailSmtpUrl  - отправка на почту (когда Nextcloud недоступен снаружи)
+# smsApiUrl    - СМС с паролем ключа и секретом 2FA (вторым каналом)
 # $1 - имя конфига
-# $2 - (опционально) логин получателя, если отличается от имени конфига
+# $2 - (опционально) логин получателя, если отличается от имени конфига,
+#      либо прямой e-mail (с @) для почтовой доставки
 
 if [ -z "$1" ]; then
     echo "No username given"
@@ -13,8 +17,8 @@ SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )" #"
 . $SCRIPTPATH/_config
 . $SCRIPTPATH/_lib
 
-if [ -z "$nextcloudUrl" ]; then
-	echo "nextcloudUrl не задан в _config - доставка конфигов не настроена"
+if [ -z "$nextcloudUrl" ] && [ -z "$mailSmtpUrl" ]; then
+	echo "ни nextcloudUrl, ни mailSmtpUrl не заданы в _config - доставка конфигов не настроена"
 	exit 1
 fi
 
@@ -24,6 +28,30 @@ fi
 userdir=$(getConfigDir $1)
 pwdfile=$userdir/passwd.txt
 goofile=$userdir/google.txt
+
+sharee=$1
+rcptEmail=""
+if [ -n "$2" ]; then
+	if [[ "$2" == *"@"* ]]; then
+		rcptEmail=$2
+	else
+		sharee=$2
+	fi
+fi
+
+#все сгенерированные конфиги пользователя (usr.generate мультисайта сам
+#удаляет неактуальные варианты, так что в папке только нужные)
+confList=""
+for conf in $userdir/*.ovpn; do
+	[ -e "$conf" ] || continue
+	confList="$confList $conf"
+done
+if [ -z "$confList" ]; then
+	echo "У пользователя $1 нет ни одного .ovpn конфига - нечего отправлять"
+	exit 11
+fi
+
+if [ -n "$nextcloudUrl" ]; then
 
 #путь к файлохранилищу vpnBot
 apiUrl=$nextcloudUrl/remote.php/dav/files/$nextCloudUID
@@ -37,19 +65,10 @@ for doc in $SCRIPTPATH/send_files/*; do
 	curl -k -s -S -u $adUser:$adPassword -X PUT "$apiUrl/openvpn/$1/$(basename "$doc")" -T "$doc"
 done
 
-#все сгенерированные конфиги пользователя (usr.generate мультисайта сам
-#удаляет неактуальные варианты, так что в папке только нужные)
-found=0
-for conf in $userdir/*.ovpn; do
-	[ -e "$conf" ] || continue
+for conf in $confList; do
 	echo "Закидываю $(basename $conf) в NEXTCLOUD"
 	curl -k -s -u $adUser:$adPassword -X PUT $apiUrl/openvpn/$1/$(basename $conf) --data-binary @$conf >> /dev/null
-	found=1
 done
-if [ $found -eq 0 ]; then
-	echo "У пользователя $1 нет ни одного .ovpn конфига - нечего отправлять"
-	exit 11
-fi
 
 curl -k -s -u $adUser:$adPassword -H "Accept: application/json" -X PROPFIND $apiUrl/openvpn/$1 | sed 's/<\/*d:href>/\n/g' | grep remote.php | cut -d'/' -f8 | grep -v '^$' > $userdir/nextcloud.txt
 filesCount=`cat $userdir/nextcloud.txt | wc -l`
@@ -60,13 +79,133 @@ if [ -z "$filesCount" ] || [ "$filesCount" -le 0 ]; then
 	exit 11
 fi
 
-
 ocsUrl=$nextcloudUrl/ocs/v2.php/apps/files_sharing/api/v1
-if [ -n "$2" ]; then
-	sharee=$2
-else
-	sharee=$1
+
+search=`curl -k -s -H "OCS-APIRequest: true" -u $adUser:$adPassword "$ocsUrl/sharees?format=json&lookup=false&itemType=folder&search=$sharee"`
+#echo $search |jq .ocs.data.users
+
+users=`echo $search |jq .ocs.data.exact.users`
+usersCount=`echo $users |jq length`
+if [ -z "$usersCount" ] || [ "$usersCount" -le 0 ]; then
+	users=`echo $search |jq .ocs.data.users`
+	usersCount=`echo $users |jq length`
 fi
+
+if [ -z "$usersCount" ] || [ "$usersCount" -gt 0 ]; then
+	maxUser=$(($usersCount - 1))
+	for i in $(seq 0 $maxUser); do
+		testUser=`echo $users |jq .[$i]`
+		userLabel=`echo $testUser | jq .label | grep "($sharee)"`
+		if [ -n "$userLabel" ]; then
+			userId=`echo $testUser | jq -r .value.shareWith`
+			userEmail=`echo $testUser | jq .shareWithDisplayNameUnique`
+		fi
+	done
+fi
+
+if [ -z "$userId" ]; then
+	echo "Не удалось найти пользователя $sharee в Nextcloud. Не могу отправить ему конфиг"
+	echo $search |jq .ocs
+	exit 10
+else 
+	echo "Пользователь $sharee найден в Nextcloud с UUID=$userId"
+fi
+
+curl -k -s -H "OCS-APIRequest: true" -d "path=/openvpn/$1&shareType=0&shareWith=$userId" -u $adUser:$adPassword $ocsUrl/shares > /dev/null
+echo "Config share - Готово"
+
+else
+#================= доставка почтой =================
+
+#адрес получателя: из аргумента (с @) либо из инвентори по логину
+if [ -z "$rcptEmail" ]; then
+	invUserMail=`curl -k -s "$inventoryApiUrl/users/search?login=$sharee"`
+	rcptEmail=`echo $invUserMail|jq -r .Email`
+	if [ "$rcptEmail" == "null" ] || [ -z "$rcptEmail" ]; then
+		echo "не могу найти e-mail для пользователя $sharee - отправка почтой невозможна"
+		echo "проверь что такой пользователь есть в инвентори и у него прописан e-mail"
+		exit 31
+	fi
+fi
+
+mailFrom=${mailFrom:-$mailUser}
+if [ -z "$mailFrom" ]; then
+	echo "mailFrom не задан в _config - не от кого отправлять"
+	exit 32
+fi
+
+echo "Конфиги будут отправлены на $rcptEmail"
+
+boundary="ovpnPart$RANDOM$RANDOM"
+mime=`mktemp`
+
+#вложение $1 в письмо
+function mimeAttach() {
+	echo "--$boundary"
+	echo "Content-Type: application/octet-stream; name=\"$(basename "$1")\""
+	echo "Content-Disposition: attachment; filename=\"$(basename "$1")\""
+	echo "Content-Transfer-Encoding: base64"
+	echo
+	base64 "$1"
+	echo
+}
+
+{
+	echo "From: $mailFrom"
+	echo "To: $rcptEmail"
+	echo "Subject: =?UTF-8?B?$(printf '%s' "Конфигурация OpenVPN ($1)" | base64 -w0)?="
+	echo "Date: $(date -R)"
+	echo "Message-ID: <ovpn-$1-$(date +%s)-$RANDOM@$(hostname)>"
+	echo "MIME-Version: 1.0"
+	echo "Content-Type: multipart/mixed; boundary=\"$boundary\""
+	echo
+	echo "--$boundary"
+	echo "Content-Type: text/plain; charset=utf-8"
+	echo "Content-Transfer-Encoding: base64"
+	echo
+	printf '%s' "Файлы конфигурации OpenVPN во вложении.
+Пароль ключа и код двухфакторной аутентификации (если используются) придут отдельным сообщением." | base64
+	echo
+
+	#инструкции для пользователя (если приложены в send_files/)
+	for doc in $SCRIPTPATH/send_files/*; do
+		[ -e "$doc" ] || continue
+		mimeAttach "$doc"
+	done
+
+	for conf in $confList; do
+		echo "Прикладываю $(basename $conf) к письму" >&2
+		mimeAttach "$conf"
+	done
+
+	echo "--$boundary--"
+} > $mime
+
+#авторизация открытым текстом недопустима: при заданном mailUser на
+#smtp:// принуждаем STARTTLS (mailInsecure=1 отключает для внутренних релеев)
+mailOpts=""
+case "$mailSmtpUrl" in
+	smtp://*)
+		if [ -n "$mailUser" ] && [ "$mailInsecure" != "1" ]; then
+			mailOpts="--ssl-reqd"
+		fi
+	;;
+esac
+[ "$mailInsecure" == "1" ] && mailOpts="$mailOpts -k"
+authOpt=()
+[ -n "$mailUser" ] && authOpt=(--user "$mailUser:$mailPassword")
+
+if ! curl -s -S $mailOpts "${authOpt[@]}" --mail-from "$mailFrom" --mail-rcpt "$rcptEmail" -T $mime "$mailSmtpUrl"; then
+	rm -f $mime
+	echo "не удалось отправить письмо через $mailSmtpUrl"
+	exit 12
+fi
+rm -f $mime
+userLabel=$rcptEmail
+echo "Письмо с конфигами - Готово"
+
+fi
+#================= конец транспортов =================
 
 #телефон нужен только для СМС
 if [ -n "$smsApiUrl" ]; then
@@ -83,56 +222,6 @@ if [ -n "$smsApiUrl" ]; then
 	fixMobile=`echo $mobile | sed 's/^\+7/8/' | tr -cd '[:digit:]'`
 	echo "Пользователь $sharee найден в инвентори с сотовым $mobile -> $fixMobile"
 fi
-
-
-search=`curl -k -s -H "OCS-APIRequest: true" -u $adUser:$adPassword "$ocsUrl/sharees?format=json&lookup=false&itemType=folder&search=$sharee"`
-#echo $search |jq .ocs.data.users
-
-users=`echo $search |jq .ocs.data.exact.users`
-usersCount=`echo $users |jq length`
-if [ -z "$usersCount" ] || [ "$usersCount" -le 0 ]; then
-	users=`echo $search |jq .ocs.data.users`
-	usersCount=`echo $users |jq length`
-fi
-
-if [ -z "$usersCount" ] || [ "$usersCount" -gt 0 ]; then
-	maxUser=$(($usersCount - 1))
-	#echo "maxUser is $maxUser"
-	for i in $(seq 0 $maxUser); do
-		#echo "iteration $i"
-		#echo $users |jq .[$i]
-		testUser=`echo $users |jq .[$i]`
-		userLabel=`echo $testUser | jq .label | grep "($sharee)"`
-		#echo $userLabel
-		if [ -n "$userLabel" ]; then
-			userId=`echo $testUser | jq -r .value.shareWith`
-			userEmail=`echo $testUser | jq .shareWithDisplayNameUnique`
-		fi
-	done
-fi
-
-if [ -z "$userId" ]; then
-	echo "Не удалось найти пользователя $sharee в Nextcloud. Не могу отправить ему конфиг"
-	echo $search |jq .ocs
-	exit 10
-else 
-	echo "Пользователь $sharee найден в Nextcloud с UUID=$userId"
-fi
-
-#if [ -z "$userEmail" ]; then
-#	echo "У пользователя $sharee в Nextcloud отсутствует e-mail. Не могу отправить ему конфиг"
-#	exit 20
-#fi
-
-
-#echo "Конфиг будет отправлен пользоватею $userLabel, на адрес $userEmail"
-#echo "Для отмены нажмите Ctrl+C"
-#for i in {5..1}; do
-#	echo "Отпрвка через $i секунд..."
-#	sleep 1
-#done
-curl -k -s -H "OCS-APIRequest: true" -d "path=/openvpn/$1&shareType=0&shareWith=$userId" -u $adUser:$adPassword $ocsUrl/shares > /dev/null
-echo "Config share - Готово"
 
 if [ -z "$smsApiUrl" ]; then
 	echo "smsApiUrl не задан в _config - СМС не отправляются (конфиги уже в Nextcloud)"

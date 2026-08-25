@@ -23,6 +23,11 @@ services:
       - "../..:/repo:ro"
       - "shared:/shared"
 
+  # SMTP-приемник для проверки почтовой доставки (usr.send)
+  mailpit:
+    image: axllent/mailpit
+    networks: [ovpntest]
+
   # профиль inventory: настоящая инвентаризация (arms) вместо заглушек
   arms-db:
     profiles: [inventory]

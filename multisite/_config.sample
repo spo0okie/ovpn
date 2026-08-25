@@ -97,3 +97,9 @@ clientsDir=$SCRIPTPATH/clients
 #если текущий CCD соответствует предыдущей конфигурации, он будет обновлен
 #previousPushRoutes="10.40.0.0/16 10.41.0.0/16"
 #mhk_previous_openvpn_lan=10.33.0.0/24
+
+#почтовая доставка вместо Nextcloud (см. корневой _config.sample)
+#mailSmtpUrl=smtps://smtp.provider.com:465
+#mailUser=vpn@contoso.com
+#mailPassword=SmtpSecret
+#mailFrom=vpn@contoso.com
