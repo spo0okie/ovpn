@@ -8,9 +8,9 @@ function deployMulti() {
 	newSandbox
 	ms=$sandbox/ms
 	mkdir -p $ms
-	#_lib.inv теперь общий, живет в корне репозитория
-	cp $REPO_DIR/multisite/_lib $REPO_DIR/_lib.inv \
-	   $REPO_DIR/multisite/_ccd.check $REPO_DIR/multisite/usr.gen.ccd $ms/
+	#_lib, _lib.inv и usr.gen.ccd - общие, живут в корне репозитория
+	cp $REPO_DIR/_lib $REPO_DIR/_lib.inv $REPO_DIR/usr.gen.ccd \
+	   $REPO_DIR/multisite/_lib.ms $REPO_DIR/multisite/_ccd.check $ms/
 	cat > $ms/_config <<CFG
 prefix=tst
 sites="mhk nn"
@@ -18,6 +18,7 @@ mhk_openvpn_lan=10.8.0.0/24
 mhk_openvpn2fa_lan=10.108.0.0/24
 nn_openvpn_lan=10.4.0.0/24
 push_routes="10.10.0.0/16"
+clientsDir=$ms/clients
 inventoryApiUrl=https://inventory.test.local/api
 CFG
 }
@@ -26,6 +27,7 @@ deployMulti
 SCRIPTPATH=$ms
 . $ms/_config
 . $ms/_lib
+. $ms/_lib.ms
 
 echo "конвертация адресов между обычной и 2FA подсетью:"
 assertEquals "normalTo2faIp" "10.108.0.7" "`normalTo2faIp 10.8.0.7 mhk`"
@@ -92,5 +94,39 @@ curlRoute "net-ips/first-unused" '{"text_addr":null}'
 ( cd $ms && ./usr.gen.ccd u4 mhk ) > $sandbox/out.log 2>&1
 assertExitCode "останов с кодом 10" "10" "$?"
 assertFileMissing "CCD не создан" $ms/clients/tst-u4/ccd.mhk
+
+echo "usr.gen.ccd - миграция маршрутов площадки:"
+deployMulti
+mkdir -p $ms/clients/tst-u5
+curlRoute "net-ips/search?name=ovpn-u5" '{"text_addr":"10.8.0.9"}'
+cat >> $ms/_config <<CFG
+mhk_previous_openvpn_lan=10.8.0.0/24
+previousPushRoutes="10.10.0.0/16"
+push_routes="10.10.0.0/16 10.11.0.0/16"
+CFG
+cat > $ms/clients/tst-u5/ccd.mhk <<OLD
+ifconfig-push 10.108.0.9 255.255.255.0
+push "route 10.8.0.0 255.255.255.0"
+push "route 10.10.0.0 255.255.0.0"
+OLD
+( cd $ms && ./usr.gen.ccd u5 mhk ) > $sandbox/out.log 2>&1
+assertExitCode "успешное завершение" "0" "$?"
+assertFileContains "сообщение об обновлении" $sandbox/out.log "CCD version updating"
+assertFileContains "добавленный маршрут" $ms/clients/tst-u5/ccd.mhk 'push "route 10.11.0.0 255.255.0.0"'
+assertFileContains "адрес сохранен" $ms/clients/tst-u5/ccd.mhk "ifconfig-push 10.108.0.9 255.255.255.0"
+
+echo "usr.gen.ccd - отключенный CCD обновляется на месте:"
+deployMulti
+mkdir -p $ms/clients/tst-u6
+curlRoute "net-ips/search?name=ovpn-u6" '{"text_addr":"10.8.0.7"}'
+( cd $ms && ./usr.gen.ccd u6 mhk ) >/dev/null 2>&1
+mv $ms/clients/tst-u6/ccd.mhk $ms/clients/tst-u6/ccd.mhk.disabled
+cat >> $ms/_config <<CFG
+push_routes="10.10.0.0/16 10.12.0.0/16"
+previousPushRoutes="10.10.0.0/16"
+CFG
+( cd $ms && ./usr.gen.ccd u6 mhk ) > $sandbox/out.log 2>&1
+assertFileMissing "включенный CCD не появился" $ms/clients/tst-u6/ccd.mhk
+assertFileContains "отключенный CCD обновлен" $ms/clients/tst-u6/ccd.mhk.disabled 'push "route 10.12.0.0 255.255.0.0"'
 
 summarize

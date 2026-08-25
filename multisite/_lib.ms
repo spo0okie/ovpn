@@ -1,16 +1,9 @@
 #!/bin/bash
+#мультисайт-специфичные функции: дополняют корневую _lib
+#(подключать после нее: . $SCRIPTPATH/_lib; . $SCRIPTPATH/_lib.ms)
 
-#путь к конфигу $1
-function getConfigDir() {
-	echo $SCRIPTPATH/clients/$prefix-$1
-}
-
-#путь к ccd файлу конфига $1 сайта $2
-function getConfigCcd() {
-	echo $(getConfigDir $1)/ccd.$2
-}
-
-#конвертировать конфиг orgname-ivan-ivanov.v-notebook -> ais-pupkin
+#конвертировать имя конфига в логин пользователя
+#contoso-ais-pupkin.v-notebook -> ais-pupkin
 function getConfigUser() {
 	configDir=`getConfigDir $1`
 	configUsernameFile=$configDir/username.txt
@@ -25,55 +18,6 @@ function getConfigUser() {
 			echo $1|cut -d- -f1-2
 		fi
 	fi
-}
-
-#получить IP адрес из CCD
-# $1 - путь к CCD
-# #2 - проверять также $ccd.disabled
-function getCcdIp() {
-	ccd=$1
-	if [ -s $ccd.disabled ]; then
-		ccd=$1.disabled
-	fi
-	if [ -s $ccd ]; then
-		grep -vE '^#' $ccd | grep 'ifconfig-push' | head -n 1 | cut -d' ' -f2
-	fi
-}
-
-#192.168.0.0/24 -> 192.168.0.0 255.255.255.0
-function suffix2mask() {
-	res=$1
-	res=${res/\/32/ 255.255.255.255}
-	res=${res/\/31/ 255.255.255.254}
-	res=${res/\/30/ 255.255.255.252}
-	res=${res/\/29/ 255.255.255.248}
-	res=${res/\/28/ 255.255.255.240}
-	res=${res/\/27/ 255.255.255.224}
-	res=${res/\/26/ 255.255.255.192}
-	res=${res/\/25/ 255.255.255.128}
-	res=${res/\/24/ 255.255.255.0}
-	res=${res/\/23/ 255.255.254.0}
-	res=${res/\/22/ 255.255.252.0}
-	res=${res/\/21/ 255.255.248.0}
-	res=${res/\/20/ 255.255.240.0}
-	res=${res/\/19/ 255.255.224.0}
-	res=${res/\/18/ 255.255.192.0}
-	res=${res/\/17/ 255.255.128.0}
-	res=${res/\/16/ 255.255.0.0}
-	res=${res/\/15/ 255.254.0.0}
-	res=${res/\/14/ 255.252.0.0}
-	res=${res/\/13/ 255.248.0.0}
-	res=${res/\/12/ 255.240.0.0}
-	res=${res/\/11/ 255.224.0.0}
-	res=${res/\/10/ 255.192.0.0}
-	res=${res/\/9/ 255.128.0.0}
-	res=${res/\/8/ 255.0.0.0}
-	echo $res
-}
-
-
-function networkSuffix() {
-	echo $1|cut -d'/' -f2
 }
 
 #конвертирует IP адрес из сети 2FAopenvpn в сеть openvpn того же филиала
@@ -101,7 +45,7 @@ function 2faToNormalIp() {
 	fi
 }
 
-#конвертирует IP адрес из сети 2FAopenvpn в сеть openvpn того же филиала
+#конвертирует IP адрес из сети openvpn в сеть 2FAopenvpn того же филиала
 #$1 - IP
 #$2 - сайт
 function normalTo2faIp() {
@@ -125,4 +69,3 @@ function normalTo2faIp() {
 		echo $addr
 	fi
 }
-

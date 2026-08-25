@@ -90,3 +90,10 @@ legacyCertsDir=./certs
 
 passLetters="abcdefghjkmnopqrstuvwxyzABCDEFJHJKLMNPQRSTUVWXYZ!@#%&23456789"
 #passLetters="abcdefghjkmnopqrstuvwxyzABCDEFJHJKLMNPQRSTUVWZYZ-=_+.,:@^?()23456789"
+#где лежат папки клиентов (базовый вариант по умолчанию: $ovpndir/clients)
+clientsDir=$SCRIPTPATH/clients
+
+#предыдущая конфигурация сетей - для массового обновления CCD (usr.gen.ccd):
+#если текущий CCD соответствует предыдущей конфигурации, он будет обновлен
+#previousPushRoutes="10.40.0.0/16 10.41.0.0/16"
+#mhk_previous_openvpn_lan=10.33.0.0/24

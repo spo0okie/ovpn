@@ -55,3 +55,31 @@ function findCertByCN() {
 #функции обмена с инвентори переехали в _lib.inv
 
 
+
+#путь к папке конфига клиента $1 (clientsDir переопределяется в _config,
+#по умолчанию - раскладка базового варианта)
+function getConfigDir() {
+	echo ${clientsDir:-$ovpndir/clients}/$prefix-$1
+}
+
+#путь к ccd файлу конфига $1: без сайта - базовый вариант (ccd),
+#с сайтом $2 - мультисайтовый (ccd.<site>)
+function getConfigCcd() {
+	if [ -n "$2" ]; then
+		echo $(getConfigDir $1)/ccd.$2
+	else
+		echo $(getConfigDir $1)/ccd
+	fi
+}
+
+#получить IP адрес из CCD (учитывает отключенный $ccd.disabled)
+# $1 - путь к CCD
+function getCcdIp() {
+	ccd=$1
+	if [ -s $ccd.disabled ]; then
+		ccd=$1.disabled
+	fi
+	if [ -s $ccd ]; then
+		grep -vE '^#' $ccd | grep 'ifconfig-push' | head -n 1 | cut -d' ' -f2
+	fi
+}

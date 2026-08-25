@@ -9,7 +9,7 @@ function deployBase() {
 	newSandbox
 	ovpn=$sandbox/ovpn
 	mkdir -p $ovpn
-	cp $REPO_DIR/usr.new $REPO_DIR/_lib $REPO_DIR/_lib.inv $ovpn/
+	cp $REPO_DIR/usr.new $REPO_DIR/usr.gen.ccd $REPO_DIR/_lib $REPO_DIR/_lib.inv $ovpn/
 	cat > $ovpn/_config <<CFG
 org=TestOrg
 prefix=tst

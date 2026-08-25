@@ -1,0 +1,141 @@
+#!/bin/bash
+#генерирует/обновляет CCD файл клиента
+#использование: usr.gen.ccd <user> [site] [noupdate]
+# site     - площадка (мультисайтовый сценарий): сеть из <site>_openvpn_lan,
+#            маршруты из push_routes, адрес конвертируется в 2FA-подсеть сайта;
+#            без сайта - базовый вариант (vpnnet/subnets)
+# noupdate - не трогать существующий CCD
+#
+#существующий CCD сверяется по md5 с предыдущей (previous*) и текущей
+#конфигурацией сети: стандартный старый - обновляется, кастомный - не
+#трогается (рядом кладутся ccd.new/ccd.old)
+
+if [ -z "$1" ]; then
+	echo "No username given"
+	exit
+fi
+
+SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )" #"
+. $SCRIPTPATH/_config
+. $SCRIPTPATH/_lib
+. $SCRIPTPATH/_lib.inv
+[ -f $SCRIPTPATH/_lib.ms ] && . $SCRIPTPATH/_lib.ms
+
+user=$1
+shift
+site=""
+noupdate=""
+for arg in "$@"; do
+	if [ "$arg" == "noupdate" ]; then
+		noupdate=1
+	else
+		site=$arg
+	fi
+done
+
+if [ -n "$site" ]; then
+	#мультисайт: сети и маршруты площадки
+	net_var=${site}_openvpn_lan
+	net=${!net_var}
+	prvnet_var=${site}_previous_openvpn_lan
+	prvnet=${!prvnet_var}
+	prvnet=${prvnet:-$net}
+	routes=$push_routes
+	prvroutes=${previousPushRoutes:-$push_routes}
+	if [ -z "$net" ]; then
+		echo "HALT: no ${site}_openvpn_lan in _config!"
+		exit 10
+	fi
+else
+	net=$vpnnet
+	prvnet=${previousVpnnet:-$vpnnet}
+	routes=$subnets
+	prvroutes=${previousSubnets:-$subnets}
+fi
+
+userdir=$(getConfigDir $user)
+ccd=$(getConfigCcd $user $site)
+
+#отключенный CCD обновляем на месте (он останется отключенным)
+if [ ! -s "$ccd" ] && [ -s "$ccd.disabled" ]; then
+	ccd=$ccd.disabled
+fi
+
+mkdir -p $userdir
+
+if [ -s $ccd ] && [ -n "$noupdate" ]; then
+	echo "CCD file already exists"
+	exit 0
+fi
+
+prv=`mktemp`
+new=`mktemp`
+if [ -n "$inventoryApiUrl" ]; then
+	echo "Fetching reserved IP for ovpn-$user"
+
+	addr=`inventoryGetPinnedIp ovpn-$user`
+	if [ "$addr" == "null" ]; then
+		echo "ERR fetching reserved addr."
+		echo "Fetching first unused IP in $net"
+		addr=`inventoryGetUnusedIp $net`
+		if [ "$addr" == "null" ]; then
+			echo "HALT: ERR fetching unused IP!"
+			exit 10
+		fi
+	fi
+	if [ -z "$addr" ]; then
+		echo "HALT: error fetching user IP!"
+		exit 10
+	fi
+
+	#в мультисайте CCD выдается в 2FA-подсети площадки (если она у сайта есть)
+	if [ -n "$site" ]; then
+		addr=`normalTo2faIp $addr $site`
+	fi
+
+	#адрес хранится без подсети - конвертируем в "адрес маска"
+	prvMask=`networkSuffix $prvnet`
+	mask=`networkSuffix $net`
+	prvAddr=`suffix2mask $addr/$prvMask`
+	addr=`suffix2mask $addr/$mask`
+	echo "got $addr"
+
+	echo "ifconfig-push $prvAddr" > $prv
+	echo "ifconfig-push $addr" > $new
+else
+	echo "Creating empty CCD"
+	touch $prv
+	touch $new
+fi
+
+echo "push \"route `suffix2mask $prvnet`\"" >> $prv
+echo "push \"route `suffix2mask $net`\"" >> $new
+
+for netw in $prvroutes; do
+	echo "push \"route `suffix2mask $netw`\"" >> $prv
+done
+for netw in $routes; do
+	echo "push \"route `suffix2mask $netw`\"" >> $new
+done
+
+prvmd5=$(md5sum "$prv" | cut -d ' ' -f 1)
+newmd5=$(md5sum "$new" | cut -d ' ' -f 1)
+if [ -s $ccd ]; then
+	curmd5=$(md5sum "$ccd" | cut -d ' ' -f 1)
+	if [ "$curmd5" == "$newmd5" ]; then
+		echo "no CCD changes ($user)"
+	else
+		if [ "$curmd5" == "$prvmd5" ]; then
+			echo "CCD version updating ($user)"
+			cp -f $new $ccd
+		else
+			echo "WARNING: custom CCD - no changes! ($user)"
+			cp -f $new $ccd.new
+			cp -f $prv $ccd.old
+		fi
+	fi
+else
+	cp -f $new $ccd
+fi
+rm -f $new
+rm -f $prv
