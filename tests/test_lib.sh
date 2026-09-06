@@ -20,6 +20,55 @@ echo "networkSuffix:"
 assertEquals "выделение суффикса" "24" "`networkSuffix 192.168.0.0/24`"
 assertEquals "суффикс /8" "8" "`networkSuffix 10.0.0.0/8`"
 
+echo "инстанс-модель: getInstances и inst_var (одиночный режим, fallback):"
+unset instances
+assertEquals "без instances - один дефолтный инстанс" "local" "`getInstances`"
+srvaddr=vpn.test.local
+port=5100
+vpnnet=192.168.77.0/24
+subnets="10.20.0.0/16"
+assertEquals "inst_var addr -> srvaddr" "vpn.test.local" "`inst_var local addr`"
+assertEquals "inst_var port -> port" "5100" "`inst_var local port`"
+assertEquals "inst_var lan -> vpnnet" "192.168.77.0/24" "`inst_var local lan`"
+assertEquals "inst_var routes -> subnets" "10.20.0.0/16" "`inst_var local routes`"
+assertEquals "inst_var auth_mode без use2fa -> normal" "normal" "`inst_var local auth_mode`"
+use2fa=1
+assertEquals "inst_var auth_mode с use2fa=1 -> 2fa" "2fa" "`inst_var local auth_mode`"
+unset use2fa
+assertEquals "inst_var delivery по умолчанию -> local" "local" "`inst_var local delivery`"
+assertEquals "inst_var inv_prefix по умолчанию -> ovpn-" "ovpn-" "`inst_var local inv_prefix`"
+
+echo "инстанс-модель: multi-instance ('-' -> '_', fallback на legacy-дефолты):"
+instances="local local-2fa"
+local_addr=ovpn.test.local
+local_2fa_addr=ovpn2fa.test.local
+local_2fa_auth_mode=2fa
+assertEquals "getInstances - список из \$instances" "local local-2fa" "`getInstances`"
+assertEquals "inst_var local addr - своя переменная" "ovpn.test.local" "`inst_var local addr`"
+assertEquals "inst_var local-2fa addr - '-' -> '_'" "ovpn2fa.test.local" "`inst_var local-2fa addr`"
+assertEquals "inst_var local-2fa auth_mode" "2fa" "`inst_var local-2fa auth_mode`"
+assertEquals "inst_var local auth_mode не задан - fallback на дефолт normal" "normal" "`inst_var local auth_mode`"
+assertEquals "inst_var local port не задан - fallback на legacy port" "5100" "`inst_var local port`"
+
+echo "instFileSuffix: суффикс имён файлов инстанса:"
+unset instances
+assertEquals "вырожденный случай - суффикс пустой" "" "`instFileSuffix . local`"
+instances="local local-2fa"
+assertEquals "multi - ccd суффикс" ".local-2fa" "`instFileSuffix . local-2fa`"
+assertEquals "multi - конфиг суффикс" "_local-2fa" "`instFileSuffix _ local-2fa`"
+assertEquals "multi - server суффикс" "-local-2fa" "`instFileSuffix - local-2fa`"
+unset instances
+unset local_addr local_2fa_addr local_2fa_auth_mode
+
+echo "getConfigCcd: суффикс инстанса:"
+prefix=tst
+ovpndir=/tmp/ovpn-test
+unset instances
+assertEquals "одиночный режим - ccd без суффикса" "/tmp/ovpn-test/clients/tst-u/ccd" "`getConfigCcd u`"
+instances="local local-2fa"
+assertEquals "multi - ccd.<instance>" "/tmp/ovpn-test/clients/tst-u/ccd.local-2fa" "`getConfigCcd u local-2fa`"
+unset instances
+
 echo "_lib.inv: получение IP (через заглушку curl):"
 newSandbox
 export inventoryApiUrl=https://inventory.test.local/api

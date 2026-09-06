@@ -12,8 +12,6 @@ SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )" #"
 
 
 
-cipher=`cat $ovpndir/server.conf | grep -E "^cipher" | cut -d ' ' -f2`
-
 if [ $1 = ca ]; then
 	openssl x509 -in ./ca.pem -days 3650 -out ca_new.pem -signkey ./ca.key
 	echo "New CA certificate stored in ca_new.pem"
@@ -28,13 +26,27 @@ if [ $1 = serv ]; then
 fi
 
 
-userdir=$ovpndir/clients/$prefix-$1
-keyfile=$userdir/${prefix}_$1.key
-certfile=$userdir/${prefix}_$1.crt
-csrfile=$userdir/${prefix}_$1.csr
-CONF=$userdir/${prefix}_$1.ovpn
+user=$1
+shift
+instance=""
+noupdate=""
+for arg in "$@"; do
+	if [ "$arg" = "noupdate" ]; then
+		noupdate=1
+	else
+		instance=$arg
+	fi
+done
+
+#cipher: из server.conf (одиночный инстанс), иначе из $cipher / дефолт
+cipher=`cat $ovpndir/server.conf 2>/dev/null | grep -E "^cipher" | cut -d ' ' -f2`
+[ -z "$cipher" ] && cipher=${cipher:-AES-256-CBC}
+
+userdir=$ovpndir/clients/$prefix-$user
+keyfile=$userdir/${prefix}_$user.key
+certfile=$userdir/${prefix}_$user.crt
+csrfile=$userdir/${prefix}_$user.csr
 goofile=$userdir/google.txt
-ccd=$userdir/ccd
 
 mkdir -p $userdir
 
@@ -76,96 +88,133 @@ else
 		echo "cert request file already exists"
 	else
 		echo "generating cert request"
-		echo -e "RU\nUral\nChel\n$org\nIT\n$1\n\n\n" |openssl req -config $sslconf -new -nodes -key $keyfile $passinOpt -out $csrfile
+		echo -e "RU\nUral\nChel\n$org\nIT\n$user\n\n\n" |openssl req -config $sslconf -new -nodes -key $keyfile $passinOpt -out $csrfile
 	fi
 	echo "generating cert file"
 	openssl ca -batch -in $csrfile -out $certfile  -config $sslconf
 fi
 
 #CCD: генерация/обновление вынесены в usr.gen.ccd (noupdate пробрасывается)
-$SCRIPTPATH/usr.gen.ccd $1 $2 || exit $?
-
-
-if [ -s $CONF ]; then
-	echo "conf file already exists"
+if [ -n "$instance" ]; then
+	instances_list=$instance
 else
->$CONF
-	echo "client">>$CONF
-	echo "dev		tun"		>>$CONF
-	echo "port		$port"		>>$CONF
-	echo "proto		$proto"		>>$CONF
-	echo "remote	$srvaddr"	>>$CONF
-	echo "<ca>"					>>$CONF
-	cat		$ovpndir/ca.pem		>>$CONF
-	echo "</ca>"				>>$CONF
-	echo "<cert>"				>>$CONF
-	cat		$certfile			>>$CONF
-	echo "</cert>"				>>$CONF
-	echo "<key>"				>>$CONF
-	cat		$keyfile			>>$CONF
-	echo "</key>"				>>$CONF
-	echo "<tls-auth>"			>>$CONF
-	cat		$ovpndir/ta.key		>>$CONF
-	echo "</tls-auth>"			>>$CONF
-	echo "tls-client"			>>$CONF
-	echo "cipher $cipher"		>>$CONF
-	echo "data-ciphers $cipher"	>>$CONF
-	echo "resolv-retry infinite">>$CONF
-	echo "persist-key"			>>$CONF
-	echo "persist-tun"			>>$CONF
-	#echo "ping 10"				>>$CONF
-	#echo "mssfix 1400"			>>$CONF
-	#echo "comp-lzo"				>>$CONF
-	cp $CONF $userdir/${prefix}_$1.conf
+	instances_list=$(getInstances)
 fi
 
-#дополнительный конфиг для OpenVPN Connect (makeConnectConf=1 в _config):
-#remote одной строкой с портом и протоколом; tls-auth без key-direction,
-#как и в основном конфиге (сервер базового варианта - двунаправленный)
-CONNCONF=$userdir/${prefix}_$1_connect.ovpn
-if [ "$makeConnectConf" = "1" ]; then
-	if [ -s $CONNCONF ]; then
-		echo "connect conf already exists"
+for inst in $instances_list; do
+	args="$user $inst"
+	[ -n "$noupdate" ] && args="$args noupdate"
+	$SCRIPTPATH/usr.gen.ccd $args || exit $?
+done
+
+#конфиг на каждый инстанс, у которого есть CCD
+need2fa=0
+for inst in $instances_list; do
+	ccd=$(getConfigCcd $user $inst)
+	if [ ! -s "$ccd" ]; then
+		continue
+	fi
+
+	if [ "$(inst_var $inst auth_mode)" = "2fa" ]; then
+		need2fa=1
+	fi
+
+	confSuffix=$(instFileSuffix _ "$inst")
+	CONF=$userdir/${prefix}_${user}${confSuffix}.ovpn
+	CONNCONF=$userdir/${prefix}_${user}${confSuffix}_connect.ovpn
+
+	inst_addr=$(inst_var $inst addr)
+	inst_port=$(inst_var $inst port)
+	inst_proto=$(inst_var $inst proto)
+	inst_mode=$(inst_var $inst auth_mode)
+
+	if [ ! -s $CONF ]; then
+		>$CONF
+		echo "client"			>>$CONF
+		echo "dev		tun"		>>$CONF
+		echo "port		$inst_port"	>>$CONF
+		echo "proto		$inst_proto"	>>$CONF
+		echo "remote	$inst_addr"	>>$CONF
+		echo "<ca>"			>>$CONF
+		cat		$ovpndir/ca.pem		>>$CONF
+		echo "</ca>"			>>$CONF
+		echo "<cert>"			>>$CONF
+		cat		$certfile		>>$CONF
+		echo "</cert>"			>>$CONF
+		echo "<key>"			>>$CONF
+		cat		$keyfile		>>$CONF
+		echo "</key>"			>>$CONF
+		echo "<tls-auth>"		>>$CONF
+		cat		$ovpndir/ta.key		>>$CONF
+		echo "</tls-auth>"		>>$CONF
+		echo "tls-client"		>>$CONF
+		echo "cipher $cipher"		>>$CONF
+		echo "data-ciphers $cipher"	>>$CONF
+		echo "resolv-retry infinite">>$CONF
+		echo "persist-key"		>>$CONF
+		echo "persist-tun"		>>$CONF
+		if [ "$inst_mode" = "2fa" ]; then
+			echo "auth-user-pass"	>>$CONF
+			echo "auth-nocache"	>>$CONF
+			echo "reneg-sec 0"	>>$CONF
+		fi
+		cp $CONF ${CONF%.ovpn}.conf
 	else
-		>$CONNCONF
-		echo "client"						>>$CONNCONF
-		echo "dev tun"						>>$CONNCONF
-		echo "remote $srvaddr $port $proto"	>>$CONNCONF
-		echo "tls-client"					>>$CONNCONF
-		echo "nobind"						>>$CONNCONF
-		echo "cipher $cipher"				>>$CONNCONF
-		echo "data-ciphers $cipher"			>>$CONNCONF
-		echo "resolv-retry infinite"		>>$CONNCONF
-		echo "persist-key"					>>$CONNCONF
-		echo "persist-tun"					>>$CONNCONF
-		echo "<ca>"							>>$CONNCONF
-		cat $ovpndir/ca.pem					>>$CONNCONF
-		echo "</ca>"						>>$CONNCONF
-		echo "<cert>"						>>$CONNCONF
-		cat $certfile						>>$CONNCONF
-		echo "</cert>"						>>$CONNCONF
-		echo "<key>"						>>$CONNCONF
-		cat $keyfile						>>$CONNCONF
-		echo "</key>"						>>$CONNCONF
-		echo "<tls-auth>"					>>$CONNCONF
-		cat $ovpndir/ta.key					>>$CONNCONF
-		echo "</tls-auth>"					>>$CONNCONF
+		echo "conf file already exists"
 	fi
-fi
 
-
-
-# fetching IP
-if [ -n "$inventoryApiUrl" ]; then
-	ip=`grep -vE '^#' $ccd | grep 'ifconfig-push' | head -n 1 | cut -d' ' -f2`
-	if [ -n "$ip" ]; then
-		inventorySetIpInfo $ip ovpn-$1
-		inventoryAttachUserIp $1 $ip
+	#дополнительный конфиг для OpenVPN Connect (makeConnectConf=1 в _config):
+	#remote одной строкой с портом и протоколом; tls-auth без key-direction,
+	#как и в основном конфиге (сервер базового варианта - двунаправленный)
+	if [ "$makeConnectConf" = "1" ]; then
+		if [ ! -s $CONNCONF ]; then
+			>$CONNCONF
+			echo "client"						>>$CONNCONF
+			echo "dev tun"						>>$CONNCONF
+			echo "remote $inst_addr $inst_port $inst_proto"	>>$CONNCONF
+			echo "tls-client"					>>$CONNCONF
+			echo "nobind"						>>$CONNCONF
+			echo "cipher $cipher"					>>$CONNCONF
+			echo "data-ciphers $cipher"				>>$CONNCONF
+			echo "resolv-retry infinite"				>>$CONNCONF
+			echo "persist-key"					>>$CONNCONF
+			echo "persist-tun"					>>$CONNCONF
+			if [ "$inst_mode" = "2fa" ]; then
+				echo "auth-user-pass"				>>$CONNCONF
+				echo "auth-nocache"				>>$CONNCONF
+				echo "reneg-sec 0"				>>$CONNCONF
+			fi
+			echo "<ca>"						>>$CONNCONF
+			cat $ovpndir/ca.pem					>>$CONNCONF
+			echo "</ca>"						>>$CONNCONF
+			echo "<cert>"						>>$CONNCONF
+			cat $certfile						>>$CONNCONF
+			echo "</cert>"						>>$CONNCONF
+			echo "<key>"						>>$CONNCONF
+			cat $keyfile						>>$CONNCONF
+			echo "</key>"						>>$CONNCONF
+			echo "<tls-auth>"					>>$CONNCONF
+			cat $ovpndir/ta.key					>>$CONNCONF
+			echo "</tls-auth>"					>>$CONNCONF
+		else
+			echo "connect conf already exists"
+		fi
 	fi
-fi
 
-#генерация секрета Google Authenticator (2FA), включается флагом use2fa=1 в _config
-if [ "$use2fa" = "1" ]; then
+	# fetching IP
+	if [ -n "$inventoryApiUrl" ]; then
+		ip=`grep -vE '^#' $ccd | grep 'ifconfig-push' | head -n 1 | cut -d' ' -f2`
+		if [ -n "$ip" ]; then
+			inv_prefix=$(inst_var $inst inv_prefix)
+			inventorySetIpInfo $ip ${inv_prefix}${user}
+			inventoryAttachUserIp $user $ip
+		fi
+	fi
+done
+
+#генерация секрета Google Authenticator (2FA): есть хоть один 2FA-инстанс
+#(в одиночном режиме - use2fa=1)
+if [ "$need2fa" = "1" ]; then
 	if [ -s $goofile ]; then
 		echo "Файл Google-auth - ОК (уже есть)"
 	else
@@ -185,12 +234,14 @@ fi
 
 header="#!/bin/bash"
 
-echo -e "$header\n$ovpndir/usr.enable $1 \$*" > $userdir/_enable
+echo -e "$header\n$ovpndir/usr.enable $user \$*" > $userdir/_enable
 chmod 755 $userdir/_enable
 
-echo -e "$header\n$ovpndir/usr.disable $1 \$*" > $userdir/_disable
+echo -e "$header\n$ovpndir/usr.disable $user \$*" > $userdir/_disable
 chmod 755 $userdir/_disable
 
-echo -e "$header\n$ovpndir/usr.new $1 \$*" > $userdir/_renew
+echo -e "$header\n$ovpndir/usr.new $user \$*" > $userdir/_renew
 chmod 755 $userdir/_renew
 
+echo -e "$header\n$ovpndir/usr.send $user \$*" > $userdir/_send
+chmod 755 $userdir/_send

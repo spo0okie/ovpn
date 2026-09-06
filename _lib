@@ -56,26 +56,88 @@ function findCertByCN() {
 
 
 
+# === модель инстансов ===
+# инстанс - первоклассная сущность доступа. Вырожденный случай - отсутствие
+# списка $instances: тогда используется дефолтный список из одного инстанса
+# "local", чьи атрибуты берутся из legacy-переменных
+# (srvaddr/port/proto/vpnnet/subnets/dns/use2fa), а имена файлов - без суффикса
+# (ccd, <prefix>_<CN>.ovpn, server.conf). Отдельного флага "режима" нет:
+# тривиальный режим получается заданием дефолтов и fallback'ом в inst_var /
+# пустым суффиксом в instFileSuffix.
+
+# список инстансов: из $instances, пусто - дефолтный список ["local"]
+function getInstances() {
+	if [ -n "$instances" ]; then
+		echo $instances
+	else
+		echo local
+	fi
+}
+
+# имя bash-переменной атрибута $2 инстанса $1: '-' в имени недопустим в
+# переменной, заменяется на '_' (local-2fa -> local_2fa_<attr>)
+function instVarName() {
+	echo "$(echo "$1" | tr '-' '_')_$2"
+}
+
+# значение атрибута $2 инстанса $1.
+# приоритет: <instance>_<attr>, затем дефолт из legacy-переменных. В вырожденном
+# случае (instances не задан) legacy-переменные и есть конфиг дефолтного
+# инстанса "local", поэтому fallback и возвращает "тривиальный режим".
+function inst_var() {
+	local inst=$1 attr=$2
+	local name=$(instVarName "$inst" "$attr")
+	local val=${!name}
+	if [ -n "$val" ]; then
+		echo "$val"
+		return 0
+	fi
+	case "$attr" in
+		addr)           echo "${srvaddr:-}";;
+		port)           echo "${port:-1194}";;
+		proto)          echo "${proto:-udp}";;
+		lan)            echo "${vpnnet:-}";;
+		routes)         echo "${subnets:-}";;
+		dns)            echo "${dns:-}";;
+		previous_lan)   echo "${previousVpnnet:-}";;
+		previous_routes) echo "${previousSubnets:-}";;
+		auth_mode)      if [ "$use2fa" = "1" ]; then echo "2fa"; else echo "normal"; fi;;
+		ccd_dir)        echo "${ovpndir:-}/ccd";;
+		delivery)       echo "local";;
+		inv_prefix)     echo "ovpn-";;
+		ssh_key)        echo "${rsynckeyfile:-}";;
+		*)              echo "";;
+	esac
+}
+
+# суффикс имени файлов инстанса $2: в вырожденном случае (instances не задан)
+# суффикс пустой - имена как в старом одиночном варианте. $1 - разделитель:
+# "." для CCD (ccd.<instance>), "_" для клиентского конфига, "-" для server-конфига.
+function instFileSuffix() {
+	if [ -z "$instances" ]; then
+		echo ""
+	else
+		echo "$1$2"
+	fi
+}
+
 #путь к папке конфига клиента $1 (clientsDir переопределяется в _config,
 #по умолчанию - раскладка базового варианта)
 function getConfigDir() {
 	echo ${clientsDir:-$ovpndir/clients}/$prefix-$1
 }
 
-#путь к ccd файлу конфига $1: без сайта - базовый вариант (ccd),
-#с сайтом $2 - мультисайтовый (ccd.<site>)
+#путь к ccd файлу клиента $1 для инстанса $2: в вырожденном случае - ccd,
+#в multi-instance - ccd.<instance>
 function getConfigCcd() {
-	if [ -n "$2" ]; then
-		echo $(getConfigDir $1)/ccd.$2
-	else
-		echo $(getConfigDir $1)/ccd
-	fi
+	local user=$1 inst=${2:-}
+	echo $(getConfigDir $user)/ccd$(instFileSuffix . "$inst")
 }
 
 #получить IP адрес из CCD (учитывает отключенный $ccd.disabled)
 # $1 - путь к CCD
 function getCcdIp() {
-	ccd=$1
+	local ccd=$1
 	if [ -s $ccd.disabled ]; then
 		ccd=$1.disabled
 	fi

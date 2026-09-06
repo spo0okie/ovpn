@@ -23,6 +23,16 @@ services:
       - "../..:/repo:ro"
       - "shared:/shared"
 
+  # второй сервер для сценария "1 хост × 2 инстанса" (обычный + 2FA)
+  server2:
+    build: .
+    cap_add: [NET_ADMIN]
+    devices: ["/dev/net/tun"]
+    networks: [ovpntest]
+    volumes:
+      - "../..:/repo:ro"
+      - "shared:/shared"
+
   # SMTP-приемник для проверки почтовой доставки (usr.send)
   mailpit:
     image: axllent/mailpit

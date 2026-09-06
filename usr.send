@@ -22,9 +22,6 @@ if [ -z "$nextcloudUrl" ] && [ -z "$mailSmtpUrl" ]; then
 	exit 1
 fi
 
-#синхронизация с инвентори перед отправкой (есть только в мультисайте)
-[ -x $SCRIPTPATH/usr.push.inv ] && $SCRIPTPATH/usr.push.inv $1
-
 userdir=$(getConfigDir $1)
 pwdfile=$userdir/passwd.txt
 goofile=$userdir/google.txt
@@ -39,8 +36,8 @@ if [ -n "$2" ]; then
 	fi
 fi
 
-#все сгенерированные конфиги пользователя (usr.generate мультисайта сам
-#удаляет неактуальные варианты, так что в папке только нужные)
+#все сгенерированные конфиги пользователя (usr.new сам создает конфиг
+#на каждый инстанс, так что в папке только актуальные)
 confList=""
 for conf in $userdir/*.ovpn; do
 	[ -e "$conf" ] || continue

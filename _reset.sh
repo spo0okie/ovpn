@@ -15,6 +15,72 @@ function netAndMask() {
 	fi
 }
 
+#путь к PAM-плагину google-authenticator (2FA-инстансы)
+pamPlugin=${pamPlugin:-/usr/lib/x86_64-linux-gnu/openvpn/plugin/openvpn-plugin-auth-pam.so}
+
+#генерация server-конфига инстанса $2 ($1 - путь к конфигу).
+#атрибуты берутся через inst_var: в вырожденном случае (instances не задан)
+#это legacy-переменные и файл server.conf; при instances - server-<instance>.conf.
+function writeServerConf() {
+	conf=$1
+	inst=$2
+
+	srvlan=$(inst_var $inst lan)
+	srvport=$(inst_var $inst port)
+	srvproto=$(inst_var $inst proto)
+	srvdns=$(inst_var $inst dns)
+	srvroutes=$(inst_var $inst routes)
+	srvccddir=$(inst_var $inst ccd_dir)
+	tag=$(instFileSuffix - "$inst")
+
+	echo "dev tun" > $conf
+	echo "port $srvport" >> $conf
+	echo "proto $srvproto" >> $conf
+	echo "ca $ovpndir/ca.pem" >> $conf
+	echo "cert $ovpndir/$prefix-serv.cert" >> $conf
+	echo "key $ovpndir/$prefix-serv.key" >> $conf
+	echo "tls-auth $ovpndir/ta.key" >> $conf
+	echo "dh $ovpndir/dh1024.pem" >> $conf
+	echo "crl-verify $ovpndir/clients/revoked.crl" >> $conf
+	echo "tls-server" >> $conf
+	echo "cipher AES-256-CBC" >> $conf
+	echo "data-ciphers AES-256-CBC" >> $conf
+	echo "server `netAndMask $srvlan`" >> $conf
+	echo "topology subnet" >> $conf
+	echo "persist-key" >> $conf
+	echo "persist-tun" >> $conf
+	echo "fast-io" >> $conf
+	#echo "comp-lzo" >> $conf
+	echo "status /var/log/openvpn$tag.status" >> $conf
+	echo "ifconfig-pool-persist $ovpndir/pool$tag.ip 360000" >> $conf
+	echo "log-append /var/log/openvpn$tag-server.log" >> $conf
+	echo "client-config-dir $srvccddir" >> $conf
+	echo "client-connect $ovpndir/route-client" >> $conf
+	echo "verb 3" >> $conf
+	echo "mute 10" >> $conf
+	echo "script-security 2" >> $conf
+	echo ";link-mtu 1472" >> $conf
+	echo "keepalive 10 60" >> $conf
+
+	if [ -n "$instances" ]; then
+		#каждый инстанс в multi-instance - собственный server_name для logserver
+		echo "setenv OPENVPN_SERVER_NAME $inst" >> $conf
+		if [ "$(inst_var $inst auth_mode)" = "2fa" ]; then
+			echo "plugin $pamPlugin openvpn" >> $conf
+		fi
+	fi
+
+	echo "push \"route `netAndMask $srvlan`\"" >> $conf
+
+	for netw in $srvroutes; do
+	    echo "push \"route `netAndMask $netw`\"" >> $conf
+	done
+
+	for ns in $srvdns; do
+	    echo "push \"dhcp-option DNS $ns\"" >> $conf
+	done
+}
+
 
 echo "WARINNG NOW RESETING OPENVPN SERVER CERTIFICATES ($org/$prefix $srvname/$srvaddr)"
 echo "Press Ctrl+C to abort..."
@@ -60,45 +126,10 @@ openvpn --genkey --secret ta.key
 openssl dhparam -out dh1024.pem 4096
 
 echo "Generating config ... "
-conf=./server.conf
 
-echo "dev tun" > $conf
-echo "port $port" >> $conf
-echo "proto $proto" >> $conf
-echo "ca $ovpndir/ca.pem" >> $conf
-echo "cert $ovpndir/$prefix-serv.cert" >> $conf
-echo "key $ovpndir/$prefix-serv.key" >> $conf
-echo "tls-auth $ovpndir/ta.key" >> $conf
-echo "dh $ovpndir/dh1024.pem" >> $conf
-echo "crl-verify $ovpndir/clients/revoked.crl" >> $conf
-echo "tls-server" >> $conf
-echo "cipher AES-256-CBC" >> $conf
-echo "data-ciphers AES-256-CBC" >> $conf
-echo "server `netAndMask $vpnnet`" >> $conf
-echo "topology subnet" >> $conf
-echo "persist-key" >> $conf
-echo "persist-tun" >> $conf
-echo "fast-io" >> $conf
-#echo "comp-lzo" >> $conf
-echo "status /var/log/openvpn.status" >> $conf
-echo "ifconfig-pool-persist $ovpndir/pool.ip 360000" >> $conf
-echo "log-append /var/log/openvpn-server.log" >> $conf
-echo "client-config-dir $ovpndir/ccd" >> $conf
-echo "client-connect $ovpndir/route-client" >> $conf
-echo "verb 3" >> $conf
-echo "mute 10" >> $conf
-echo "script-security 2" >> $conf
-echo ";link-mtu 1472" >> $conf
-echo "keepalive 10 60" >> $conf
-
-echo "push \"route `netAndMask $vpnnet`\"" >> $conf
-
-for netw in $subnets; do
-    echo "push \"route `netAndMask $netw`\"" >> $conf
-done
-
-for ns in $dns; do
-    echo "push \"dhcp-option DNS $ns\"" >> $conf
+#в вырожденном случае getInstances вернёт один "local" -> server.conf
+for inst in $(getInstances); do
+	writeServerConf ./server$(instFileSuffix - "$inst").conf "$inst"
 done
 
 echo "Initializing revoke.crl"

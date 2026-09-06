@@ -78,9 +78,11 @@ function newSandbox() {
 	export CURL_UPLOADS=$sandbox/uploads
 	export CURL_ROUTES=$sandbox/curl.routes
 	export GAUTH_LOG=$sandbox/gauth.log
+	export SSH_LOG=$sandbox/ssh.log
 	: > $CURL_LOG
 	: > $CURL_ROUTES
 	: > $GAUTH_LOG
+	: > $SSH_LOG
 }
 
 #добавить маршрут заглушке curl: подстрока_URL -> json-ответ

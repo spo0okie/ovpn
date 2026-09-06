@@ -1,4 +1,6 @@
 #!/bin/bash
+#включает CCD (публикует на инстанс) для конфига $1 на инстансе $2
+#(или на всех инстансах, если $2 отсутствует)
 
 if [ -z "$1" ]; then
     echo "No username given"
@@ -7,20 +9,19 @@ fi
 
 SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )" #"
 . $SCRIPTPATH/_config
+. $SCRIPTPATH/_lib
 
+user=$1
+instance=${2:-}
 
-userdir=$ovpndir/clients/$prefix-$1
-ccdln=$ovpndir/ccd/$1
-ccd=$userdir/ccd
-
-if [ ! -s $ccd ]; then
-	echo "CCD file missing ($ccd)"
+if [ -z "$instance" ]; then
+	for inst in $(getInstances); do
+		ccd=$(getConfigCcd $user $inst)
+		if [ -s "$ccd" ] || [ -s "$ccd.disabled" ]; then
+			$SCRIPTPATH/usr.enable $user $inst
+		fi
+	done
 	exit
 fi
 
-if [ -f $ccdln ]; then
-	echo "CCD link already exists"
-else
-	echo "Linking CCD to user dir"
-	ln -s $ccd $ccdln
-fi
+$SCRIPTPATH/usr.publish $user $instance enable

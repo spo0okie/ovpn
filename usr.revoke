@@ -11,7 +11,7 @@ SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )" #"
 . $SCRIPTPATH/_config
 . $SCRIPTPATH/_lib
 
-#файл CRL: по умолчанию как в базовом варианте, multisite переопределяет в _config
+#файл CRL: путь задается в _config (crlfile), по умолчанию - раскладка базового варианта
 crlfile=${crlfile:-./clients/revoked.crl}
 
 function showcrl() {

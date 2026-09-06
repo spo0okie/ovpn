@@ -1,0 +1,95 @@
+#!/bin/bash
+#публикует CCD (и секрет 2FA) клиента на инстанс
+#использование: usr.publish <user> [instance] [enable|disable]  (default: enable)
+#способ доставки из <instance>_delivery: local (симлинк в <instance>_ccd_dir)
+#или ssh (как прежний usr.push). Для auth_mode=2fa публикуется google.txt
+#в <instance>_gauth_dir.
+#без [instance] - цикл по всем инстансам.
+
+if [ -z "$1" ]; then
+	echo "No username given"
+	exit 1
+fi
+
+SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )" #"
+. $SCRIPTPATH/_config
+. $SCRIPTPATH/_lib
+
+user=$1
+instance=${2:-}
+action=${3:-enable}
+
+if [ -z "$instance" ]; then
+	for inst in $(getInstances); do
+		ccd=$(getConfigCcd $user $inst)
+		if [ -s "$ccd" ] || [ -s "$ccd.disabled" ]; then
+			$SCRIPTPATH/usr.publish $user $inst $action
+		fi
+	done
+	exit
+fi
+
+delivery=$(inst_var $instance delivery)
+ccd_dir=$(inst_var $instance ccd_dir)
+ccd=$(getConfigCcd $user $instance)
+goofile=$(getConfigDir $user)/google.txt
+
+if [ "$action" = "disable" ]; then
+	#локальный источник: активный -> отключенный (адрес/маршруты сохраняются)
+	if [ -s "$ccd" ]; then
+		mv "$ccd" "$ccd.disabled"
+	fi
+else
+	#восстановление отключенного CCD
+	if [ ! -s "$ccd" ] && [ -s "$ccd.disabled" ]; then
+		mv "$ccd.disabled" "$ccd"
+	fi
+fi
+
+if [ "$delivery" = "ssh" ]; then
+	ssh_host=$(inst_var $instance ssh_host)
+	ssh_key=$(inst_var $instance ssh_key)
+	if [ -z "$ssh_host" ]; then
+		echo "HALT: no <instance>_ssh_host for instance $instance"
+		exit 2
+	fi
+	remote_ccd=$ccd_dir/$user
+	if [ "$action" = "enable" ]; then
+		if [ ! -s "$ccd" ]; then
+			echo "нет CCD для $user@$instance"
+			exit 1
+		fi
+		ccdata=`cat $ccd`
+		ssh -i $ssh_key root@$ssh_host "echo '$ccdata' > $remote_ccd && rm -f ${remote_ccd}_OFF"
+		if [ "$(inst_var $instance auth_mode)" = "2fa" ] && [ -s "$goofile" ]; then
+			gauth_dir=$(inst_var $instance gauth_dir)
+			goodata=`cat $goofile`
+			ssh -i $ssh_key root@$ssh_host "mkdir -p $gauth_dir/$user/ && echo '$goodata' > $gauth_dir/$user/.google_auth && chmod 600 $gauth_dir/$user/.google_auth"
+		fi
+	else
+		ssh -i $ssh_key root@$ssh_host "test -e $remote_ccd && mv -f $remote_ccd ${remote_ccd}_OFF"
+	fi
+else
+	ccdln=$ccd_dir/$user
+	if [ "$action" = "enable" ]; then
+		if [ ! -s "$ccd" ]; then
+			echo "нет CCD для $user@$instance"
+			exit 1
+		fi
+		[ -d "$ccd_dir" ] || mkdir -p "$ccd_dir"
+		[ -e "$ccdln" ] && rm -f "$ccdln"
+		ln -s "$ccd" "$ccdln"
+		echo "Linking CCD to $ccdln"
+		if [ "$(inst_var $instance auth_mode)" = "2fa" ] && [ -s "$goofile" ]; then
+			gauth_dir=$(inst_var $instance gauth_dir)
+			if [ -n "$gauth_dir" ]; then
+				mkdir -p "$gauth_dir/$user"
+				cp -f "$goofile" "$gauth_dir/$user/.google_auth"
+				chmod 600 "$gauth_dir/$user/.google_auth"
+			fi
+		fi
+	else
+		rm -f "$ccdln"
+		echo "removing CCD link $ccdln"
+	fi
+fi

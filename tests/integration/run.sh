@@ -13,6 +13,9 @@ INSIDE=/repo/tests/integration/inside
 function srv() {	#выполнить в контейнере server
 	docker compose exec -T server bash -c "$*"
 }
+function srv2() {	#выполнить в контейнере server2 (multi-instance)
+	docker compose exec -T server2 bash -c "$*"
+}
 function cli() {	#выполнить в контейнере client
 	docker compose exec -T client bash "$@"
 }
@@ -232,5 +235,26 @@ if [ "$WITH_INVENTORY" == "1" ]; then
 	cli $INSIDE/connect.sh /shared/tst_inv1.ovpn success "src $addr1"
 	assertExitCode "клиент поднял туннель с адресом из инвентори" "0" "$?"
 fi
+
+echo "== 9. Один хост, два инстанса (обычный + 2FA)"
+srv2 "bash $INSIDE/setup-multiinstance.sh"
+assertExitCode "инициализация двух инстансов" "0" "$?"
+[ $failures -gt 0 ] && { echo "server2 не поднялся - пропускаю остальное"; summarize; }
+
+srv2 "cd /etc/openvpn && ./usr.new multi1 >/dev/null && ./usr.publish multi1"
+assertExitCode "usr.new + usr.publish (2 инстанса)" "0" "$?"
+
+srv2 "cd /etc/openvpn && grep -qF 'auth-user-pass' clients/tst-multi1/tst_multi1_local-2fa.ovpn"
+assertExitCode "2FA-конфиг содержит auth-user-pass" "0" "$?"
+
+srv2 "cd /etc/openvpn && ! grep -qF 'auth-user-pass' clients/tst-multi1/tst_multi1_local.ovpn"
+assertExitCode "обычный конфиг без auth-user-pass" "0" "$?"
+
+srv2 "cd /etc/openvpn && [ -e ccd/multi1 ] && [ -e ccd-2fa/multi1 ]"
+assertExitCode "CCD опубликованы в раздельные каталоги" "0" "$?"
+
+srv2 "cp /etc/openvpn/clients/tst-multi1/tst_multi1_local.ovpn /shared/"
+cli $INSIDE/connect.sh /shared/tst_multi1_local.ovpn success "" "" 192.168.88.1
+assertExitCode "обычный конфиг поднимает туннель (server2)" "0" "$?"
 
 summarize

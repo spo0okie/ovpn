@@ -1,10 +1,10 @@
 #!/bin/bash
-#генерирует/обновляет CCD файл клиента
-#использование: usr.gen.ccd <user> [site] [noupdate]
-# site     - площадка (мультисайтовый сценарий): сеть из <site>_openvpn_lan,
-#            маршруты из push_routes, адрес конвертируется в 2FA-подсеть сайта;
-#            без сайта - базовый вариант (vpnnet/subnets)
-# noupdate - не трогать существующий CCD
+#генерирует/обновляет CCD файл клиента для инстанса
+#использование: usr.gen.ccd <user> [instance] [noupdate]
+# instance  - инстанс доступа: сеть из <instance>_lan, маршруты из
+#             <instance>_routes, IP закрепляется по <instance>_inv_prefix.
+#             Без инстанса в одиночном режиме - дефолтный "local" (ccd).
+# noupdate  - не трогать существующий CCD
 #
 #существующий CCD сверяется по md5 с предыдущей (previous*) и текущей
 #конфигурацией сети: стандартный старый - обновляется, кастомный - не
@@ -19,42 +19,36 @@ SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )" #"
 . $SCRIPTPATH/_config
 . $SCRIPTPATH/_lib
 . $SCRIPTPATH/_lib.inv
-[ -f $SCRIPTPATH/_lib.ms ] && . $SCRIPTPATH/_lib.ms
 
 user=$1
 shift
-site=""
+instance=""
 noupdate=""
 for arg in "$@"; do
 	if [ "$arg" == "noupdate" ]; then
 		noupdate=1
 	else
-		site=$arg
+		instance=$arg
 	fi
 done
 
-if [ -n "$site" ]; then
-	#мультисайт: сети и маршруты площадки
-	net_var=${site}_openvpn_lan
-	net=${!net_var}
-	prvnet_var=${site}_previous_openvpn_lan
-	prvnet=${!prvnet_var}
-	prvnet=${prvnet:-$net}
-	routes=$push_routes
-	prvroutes=${previousPushRoutes:-$push_routes}
-	if [ -z "$net" ]; then
-		echo "HALT: no ${site}_openvpn_lan in _config!"
-		exit 10
-	fi
-else
-	net=$vpnnet
-	prvnet=${previousVpnnet:-$vpnnet}
-	routes=$subnets
-	prvroutes=${previousSubnets:-$subnets}
+#без инстанса - дефолтный "local" (в одиночном режиме его атрибуты - legacy-переменные)
+instance="${instance:-local}"
+
+net=$(inst_var $instance lan)
+routes=$(inst_var $instance routes)
+prvnet=$(inst_var $instance previous_lan)
+prvnet=${prvnet:-$net}
+prvroutes=$(inst_var $instance previous_routes)
+prvroutes=${prvroutes:-$routes}
+
+if [ -z "$net" ]; then
+	echo "HALT: no <instance>_lan in _config! (instance=$instance)"
+	exit 10
 fi
 
 userdir=$(getConfigDir $user)
-ccd=$(getConfigCcd $user $site)
+ccd=$(getConfigCcd $user $instance)
 
 #отключенный CCD обновляем на месте (он останется отключенным)
 if [ ! -s "$ccd" ] && [ -s "$ccd.disabled" ]; then
@@ -68,12 +62,14 @@ if [ -s $ccd ] && [ -n "$noupdate" ]; then
 	exit 0
 fi
 
+inv_prefix=$(inst_var $instance inv_prefix)
+
 prv=`mktemp`
 new=`mktemp`
 if [ -n "$inventoryApiUrl" ]; then
-	echo "Fetching reserved IP for ovpn-$user"
+	echo "Fetching reserved IP for ${inv_prefix}${user}"
 
-	addr=`inventoryGetPinnedIp ovpn-$user`
+	addr=`inventoryGetPinnedIp ${inv_prefix}${user}`
 	if [ "$addr" == "null" ]; then
 		echo "ERR fetching reserved addr."
 		echo "Fetching first unused IP in $net"
@@ -86,11 +82,6 @@ if [ -n "$inventoryApiUrl" ]; then
 	if [ -z "$addr" ]; then
 		echo "HALT: error fetching user IP!"
 		exit 10
-	fi
-
-	#в мультисайте CCD выдается в 2FA-подсети площадки (если она у сайта есть)
-	if [ -n "$site" ]; then
-		addr=`normalTo2faIp $addr $site`
 	fi
 
 	#адрес хранится без подсети - конвертируем в "адрес маска"

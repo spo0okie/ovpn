@@ -16,6 +16,10 @@ srvname=$prefix-server
 srvaddr=ovpn.sampleorg.ru
 
 #protocol and port
+#legacy-алиасы дефолтного инстанса (вырожденный случай: instances не задан):
+# srvaddr -> <instance>_addr, port -> <instance>_port, proto -> <instance>_proto,
+# vpnnet -> <instance>_lan, subnets -> <instance>_routes, dns -> <instance>_dns,
+# use2fa -> <instance>_auth_mode=2fa
 proto=udp
 port=5100
 
@@ -85,3 +89,41 @@ inventoryApiUrl=https://inventory.sampleOrg.local/web/api
 #mailUser=vpn@sampleorg.ru
 #mailPassword=SmtpSecret
 #mailFrom=vpn@sampleorg.ru
+
+# === multi-instance (опционально) ===
+# Вырожденный случай - instances НЕ задан: используется дефолтный список из
+# одного инстанса "local". Его конфиг - это legacy-переменные выше
+# (srvaddr/port/proto/vpnnet/subnets/dns/use2fa): fallback в inst_var
+# возвращает их как значения атрибутов, а имена файлов - без суффикса
+# (ccd, <prefix>_<CN>.ovpn, server.conf); server_name logserver'а = "local".
+# Отдельного флага "режима" нет: тривиальный режим получается дефолтами.
+#
+# instances - список имён инстансов. '-' в имени допустим как
+# identity/server_name, но недопустим в bash-переменной: префикс переменной
+# инстанса = имя с '-'->'_' (local-2fa -> local_2fa_*).
+# Если атрибут инстанса не задан - fallback на те же legacy-дефолты.
+#instances="local local-2fa"
+# на каждый инстанс (префикс переменной = имя с '-'->'_'):
+#local_addr="ovpn.sampleorg.ru"    # адрес подключения клиента
+#local_port=5100
+#local_proto=udp
+#local_lan=192.168.77.0/24         # VPN-подсеть инстанса
+#local_routes="192.168.77.0/24 172.20.0.0/16"   # маршруты инстанса
+#local_dns="192.168.77.2"
+#local_auth_mode=normal            # normal | 2fa
+#local_ccd_dir=/etc/openvpn/ccd    # каталог публикации CCD
+#local_delivery=local              # local | ssh
+#local_inv_prefix="ovpn-"          # префикс имени IP-записи инвентаризации
+# при delivery=ssh: local_ssh_host=ovpn.contoso.local local_ssh_key=/root/.ssh/openvpn.control local_gauth_dir=/etc/google-auth
+#
+#local_2fa_addr="ovpn2fa.sampleorg.ru"
+#local_2fa_port=5101
+#local_2fa_proto=udp
+#local_2fa_lan=192.168.178.0/24
+#local_2fa_routes="192.168.178.0/24"
+#local_2fa_auth_mode=2fa
+#local_2fa_ccd_dir=/etc/openvpn/ccd-2fa
+#local_2fa_delivery=local
+#local_2fa_inv_prefix="ovpn2fa-"
+# опционально на инстанс: <instance>_previous_lan / <instance>_previous_routes
+# (массовое обновление CCD при смене подсети - аналог previousVpnnet/previousSubnets)

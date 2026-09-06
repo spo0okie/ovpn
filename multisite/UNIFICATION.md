@@ -63,24 +63,34 @@
 2FA шлются при наличии `passwd.txt`/`google.txt`. Попутно исправлен
 незакавыченный URL с `&` (терялся `expand=private_phone`).
 
-## 6. Обобщение мультисайтовости (высокий риск, финал)
+## 6. Обобщение мультисайтовости (высокий риск, финал) — ВЫПОЛНЕНО инстанс-моделью
 
-- ввести в базовый `_config` понятие `sites="local"` c локальным сайтом
-  по умолчанию;
-- `usr.push` для локального сайта = текущий `usr.enable` (линк CCD в
-  локальный ccd-каталог) вместо ssh;
-- `_ccd.check` научить любым маскам (сейчас только /24) и убрать
-  требование совпадения третьего октета 2FA-подсети (см. `2faToNormalIp`);
-- после этого multisite/ как отдельная папка исчезает: остаются одни
-  скрипты + разные `_config`.
+Вместо `sites="local"` и site-центричной логики введена инстанс-модель
+(см. `plans/migration-instance-model.md` — канон):
 
-## 7. Reset для мультисайта
+- `_lib`: `getInstances`/`inst_var` — инстанс как первоклассная сущность,
+  дефолтный одиночный инстанс "local" падает на legacy-переменные
+  (`srvaddr/port/proto/vpnnet/subnets/dns/use2fa`), CCD без суффикса;
+- CCD на инстанс: `ccd.<instance>` (дефолтный — `ccd`); сеть/маршруты из
+  `<instance>_lan/_routes`, IP закрепляется по `<instance>_inv_prefix`;
+- `usr.new` генерирует конфиг на каждый инстанс с CCD (`<prefix>_<CN>_<instance>.ovpn`),
+  при `auth_mode=2fa` — `auth-user-pass`/`auth-nocache`/`reneg-sec 0`;
+- единый `usr.publish` (`<instance>_delivery=local|ssh`) вместо `usr.push`;
+- `_ccd.check`/`normalTo2faIp`/`2faToNormalIp` удалены: режим — атрибут
+  `auth_mode`, доступ — наличие `ccd.<instance>`; подсети инстансов
+  независимы (ограничение /24 и совпадение третьего октета сняты);
+- multisite/ как отдельная папка скриптов исчезла: остались одни корневые
+  скрипты + разные `_config` (см. корневой `_config.sample`, блок `instances`).
 
-Рабочего скрипта инициализации серверов сайтов нет (исторический
-`_reset.sh` ссылается на переменные одно-серверной конфигурации).
-После шага 6 написать общий `_reset.sh`, генерирующий server.conf на
-сайт (обычный + 2FA инстанс с PAM google-authenticator) — образцы
-конфигов снять с действующих серверов.
+Разовая миграция продовых данных multisite — `migrate-to-instances.sh`
+(переименование `ccd.<site>` → `ccd.<site>`/`ccd.<site>-2fa`).
+
+## 7. Reset для мультисайта — ВЫПОЛНЕНО
+
+Корневой `_reset.sh` переписан под инстанс-модель: в одиночном режиме —
+`server.conf` как раньше; при заданном `instances` — `server-<instance>.conf`
+на каждый инстанс (`<instance>_lan/_port/_proto/_ccd_dir`), для 2FA —
+`plugin openvpn-plugin-auth-pam.so openvpn` + `setenv OPENVPN_SERVER_NAME <instance>`.
 
 ## Не переносим (кандидаты на удаление)
 

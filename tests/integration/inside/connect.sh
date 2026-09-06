@@ -4,11 +4,14 @@
 # $2 - ожидание: success | fail
 # $3 - (опционально) подстрока, которую ищем в логе клиента
 #      (например пушнутый маршрут)
+# $4 - (опционально) файл с паролем ключа (для usePassKey-конфигов)
+# $5 - (опционально) адрес для ping через туннель (default 192.168.77.1)
 
 config=$1
 expect=$2
 wantline=$3
 askpass=$4	#файл с паролем ключа (для usePassKey-конфигов)
+pingtarget=${5:-192.168.77.1}
 log=/tmp/client.log
 timeout=${CONNECT_TIMEOUT:-30}
 
@@ -37,7 +40,7 @@ if [ "$expect" == "success" ]; then
 		echo "FAIL: туннель не поднялся ($config)"
 		tail -15 $log
 		rc=1
-	elif ! ping -c 2 -W 3 192.168.77.1 >/dev/null; then
+	elif ! ping -c 2 -W 3 "$pingtarget" >/dev/null; then
 		echo "FAIL: туннель поднялся, но сервер не пингуется"
 		rc=1
 	elif [ -n "$wantline" ] && ! { ip route | grep -qF -- "$wantline" || grep -qF -- "$wantline" $log; }; then
