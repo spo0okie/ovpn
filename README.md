@@ -126,20 +126,27 @@ mv _config.sample _config
 
 ```sh
 # _config
-instances="local local-2fa"
-local_addr="ovpn.example.org"   local_port=1194  local_lan=192.168.77.0/24
-local_routes="192.168.77.0/24 172.20.0.0/16"     local_dns="192.168.77.2"
-local_auth_mode=normal          local_ccd_dir=/etc/openvpn/ccd    local_delivery=local
-local_2fa_addr="ovpn.example.org" local_2fa_port=1196 local_2fa_lan=192.168.178.0/24
-local_2fa_routes="192.168.178.0/24"              local_2fa_auth_mode=2fa
-local_2fa_ccd_dir=/etc/openvpn/ccd-2fa           local_2fa_delivery=local
-local_2fa_gauth_dir=/etc/google-auth
+instances="main main-2fa"
+main_addr="ovpn.example.org"   main_port=1194  main_lan=192.168.77.0/24
+main_routes="192.168.77.0/24 172.20.0.0/16"     main_dns="192.168.77.2"
+main_auth_mode=normal          main_ccd_dir=/etc/openvpn/ccd    main_delivery=local
+main_2fa_addr="ovpn.example.org" main_2fa_port=1196 main_2fa_lan=192.168.178.0/24
+main_2fa_routes="192.168.178.0/24"              main_2fa_auth_mode=2fa
+main_2fa_ccd_dir=/etc/openvpn/ccd-2fa           main_2fa_delivery=local
+main_2fa_gauth_dir=/etc/google-auth
+# имя CCD-файла на инстанс (по умолчанию ccd.<instance>):
+main_ccd_suffix=""          # -> ccd (без суффикса, как в legacy single)
+main_2fa_ccd_suffix=".2fa"  # -> ccd.2fa
 ```
 ```bash
-./_reset.sh              # server-local.conf + server-local-2fa.conf (общие CA/серт/dh/ta)
-./usr.new username       # ccd.local, ccd.local-2fa + конфиги на каждый инстанс
+./_reset.sh              # server-main.conf + server-main-2fa.conf (общие CA/серт/dh/ta)
+./usr.new username       # ccd, ccd.2fa + конфиги на каждый инстанс
 ./usr.publish username   # CCD в ccd/username и ccd-2fa/username (+ google.txt в gauth_dir)
 ```
+
+Суффикс CCD-файла управляется атрибутом `<instance>_ccd_suffix`: пустая строка —
+CCD без суффикса (`ccd`), иначе `ccd<суффикс>`. Если атрибут не задан, суффикс =
+`.<instance>`.
 
 ### Добавить второй инстанс к существующему
 
@@ -153,18 +160,19 @@ local_2fa_gauth_dir=/etc/google-auth
 **B. Боевой сервер — без перевыпуска CA.** Инстанс добавляется вручную, CA не
 трогается:
 1. в `_config` прописать `instances` и переменные нового инстанса;
-2. переименовать `server.conf` → `server-local.conf` (по соглашению имён) и
-   сделать копию под второй инстанс `server-local-2fa.conf`, поменяв в ней:
+2. переименовать `server.conf` → `server-main.conf` (по соглашению имён) и
+   сделать копию под второй инстанс `server-main-2fa.conf`, поменяв в ней:
    `port`, `server <lan> <mask>`, `status`/`log-append`/`ifconfig-pool-persist`
-   (суффикс `-local-2fa`), `client-config-dir <ccd_dir>`; для 2FA добавить
+   (суффикс `-main-2fa`), `client-config-dir <ccd_dir>`; для 2FA добавить
    `plugin .../openvpn-plugin-auth-pam.so openvpn` и
-   `setenv OPENVPN_SERVER_NAME local-2fa`;
-3. создать каталог публикации CCD (`local_2fa_ccd_dir`) и, для 2FA, `gauth_dir`;
+   `setenv OPENVPN_SERVER_NAME main-2fa`;
+3. создать каталог публикации CCD (`main_2fa_ccd_dir`) и, для 2FA, `gauth_dir`;
 4. CA/`<prefix>-serv.cert`/`ta.key`/`dh1024.pem` — общие, их не трогать;
-5. пересоздать клиентские данные под новую схему: старый CCD (`ccd`) и конфиг
-   (`<prefix>_<CN>.ovpn`) переименовать в `ccd.local` / `<prefix>_<CN>_local.ovpn`
-   либо просто запустить `./usr.new username` для каждого пользователя
-   (он досоздаст `ccd.local` и конфиг; старые файлы удалить вручную), затем
+5. CCD можно оставить как есть: первому инстансу задать пустой суффикс
+   `main_ccd_suffix=""` (файл остаётся `ccd`), второму — `main_2fa_ccd_suffix=".2fa"`
+   (файл `ccd.2fa`). Клиентские конфиги пересоздать: `./usr.new username` для
+   каждого пользователя (досоздаст `ccd.2fa` и конфиги
+   `<prefix>_<CN>_main.ovpn` / `<prefix>_<CN>_main-2fa.ovpn`), затем
    `./usr.publish username`.
 
 ### Несколько хостов (доставка по ssh)
@@ -239,7 +247,10 @@ local/ssh). Внешние сервисы подменяются заглушк�
 
 Скрипты можно раскатывать поверх живого сервера (`git pull`): все
 окружение-специфичное (`_config`, `clients/`, `ccd/`, ключи, `server.conf`)
-в `.gitignore` и не затрагивается. После обновления проверить:
+в `.gitignore` и не затрагивается. Пошаговая инструкция перехода со старого
+single-instance на инстанс-модель — в [MIGRATION.md](MIGRATION.md).
+
+Кратко, после обновления проверить:
 
 1. `_config`: если инвентори требует авторизацию — логин/пароль теперь
    указываются прямо в `inventoryApiUrl`

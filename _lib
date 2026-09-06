@@ -121,6 +121,20 @@ function instFileSuffix() {
 	fi
 }
 
+# суффикс CCD-файла инстанса $1. Можно переопределить атрибутом
+# <instance>_ccd_suffix (например main_2fa_ccd_suffix=".2fa"), в том числе
+# пустой строкой (main_ccd_suffix="") - тогда CCD без суффикса, как в legacy.
+# По умолчанию: "" в вырожденном случае, ".<instance>" при заданном instances.
+function instCcdSuffix() {
+	local inst=$1
+	local name=$(instVarName "$inst" ccd_suffix)
+	if [[ -v "$name" ]]; then
+		echo "${!name}"
+		return 0
+	fi
+	instFileSuffix . "$inst"
+}
+
 #путь к папке конфига клиента $1 (clientsDir переопределяется в _config,
 #по умолчанию - раскладка базового варианта)
 function getConfigDir() {
@@ -128,10 +142,10 @@ function getConfigDir() {
 }
 
 #путь к ccd файлу клиента $1 для инстанса $2: в вырожденном случае - ccd,
-#в multi-instance - ccd.<instance>
+#в multi-instance - ccd.<instance> (или ccd<ccd_suffix>, если задан)
 function getConfigCcd() {
 	local user=$1 inst=${2:-}
-	echo $(getConfigDir $user)/ccd$(instFileSuffix . "$inst")
+	echo $(getConfigDir $user)/ccd$(instCcdSuffix "$inst")
 }
 
 #получить IP адрес из CCD (учитывает отключенный $ccd.disabled)

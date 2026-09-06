@@ -127,3 +127,7 @@ inventoryApiUrl=https://inventory.sampleOrg.local/web/api
 #local_2fa_inv_prefix="ovpn2fa-"
 # опционально на инстанс: <instance>_previous_lan / <instance>_previous_routes
 # (массовое обновление CCD при смене подсети - аналог previousVpnnet/previousSubnets)
+# и <instance>_ccd_suffix - суффикс имени CCD-файла (по умолчанию ".<instance>").
+# Пустая строка - CCD без суффикса (как в legacy single):
+#   main_ccd_suffix=""          # -> ccd
+#   main_2fa_ccd_suffix=".2fa"  # -> ccd.2fa
