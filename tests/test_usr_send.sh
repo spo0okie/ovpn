@@ -67,6 +67,7 @@ rm $userdir/google.txt
 runSend send1
 assertExitCode "успешное завершение" "0" "$rc"
 assertFileNotContains "СМС с ключом не отправлялась" $CURL_LOG "text=Ключ Google"
+assertFileContains "объяснено отсутствие секрета 2FA" $sandbox/out.log "требуется 2FA, но файл $userdir/google.txt отсутствует или пуст"
 
 echo "без пароля (нет passwd.txt) - СМС пароля не отправляется:"
 deploySend
@@ -75,6 +76,7 @@ runSend send1
 assertExitCode "успешное завершение" "0" "$rc"
 assertFileNotContains "СМС с паролем не отправлялась" $CURL_LOG "text=пароль"
 assertFileContains "ключ 2FA все равно отправлен" $CURL_LOG "text=Ключ Google"
+assertFileContains "объяснено отсутствие пароля" $sandbox/out.log "требуется пароль приватного ключа, но файл $userdir/passwd.txt отсутствует или пуст"
 
 echo "без smsApiUrl - только шара, без СМС:"
 deploySend
@@ -83,6 +85,7 @@ runSend send1
 assertExitCode "успешное завершение" "0" "$rc"
 assertFileContains "шара выдана" $CURL_LOG "shareWith=UUID-1"
 assertFileNotContains "СМС не отправлялись" $CURL_LOG "sms/send"
+assertFileContains "объяснено отсутствие настроек СМС" $sandbox/out.log "требуется пароль приватного ключа, но smsApiUrl не задан"
 
 echo "модуль не настроен (нет nextcloudUrl):"
 deploySend
@@ -140,6 +143,7 @@ assertNotContains "письмо не обещает пароль без заши
 assertNotContains "пароль не отправлен для незашифрованного конфига" $CURL_LOG "text=пароль"
 assertNotContains "2FA-секрет не отправлен без auth-user-pass" $CURL_LOG "text=Ключ Google"
 assertFileNotContains "номер не запрашивается, когда СМС не нужны" $CURL_LOG "expand=private_phone"
+assertFileContains "явно сказано, что секреты не нужны" $sandbox/out.log "передача секретов не требуется"
 
 echo "прямой e-mail вторым аргументом:"
 deploySendMail

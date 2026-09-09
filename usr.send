@@ -124,7 +124,7 @@ if [ -z "$userId" ]; then
 	echo "Не удалось найти пользователя $sharee в Nextcloud. Не могу отправить ему конфиг"
 	echo $search |jq .ocs
 	exit 10
-else 
+else
 	echo "Пользователь $sharee найден в Nextcloud с UUID=$userId"
 fi
 
@@ -236,6 +236,32 @@ echo "Письмо с конфигами - Готово"
 fi
 #================= конец транспортов =================
 
+
+if [ "$requiresKeyPassword" != "1" ] && [ "$requires2fa" != "1" ]; then
+	echo "Для отправленных конфигов передача секретов не требуется"
+	exit 0
+fi
+
+if [ -z "$smsApiUrl" ]; then
+	if [ "$requiresKeyPassword" = "1" ]; then
+		echo "Для отправленных конфигов требуется пароль приватного ключа, но smsApiUrl не задан — СМС с паролем не отправлено"
+	fi
+	if [ "$requires2fa" = "1" ]; then
+		echo "Для отправленных конфигов требуется 2FA, но smsApiUrl не задан — СМС с ключом Google Authenticator не отправлено"
+	fi
+	exit 0
+fi
+
+if [ "$sendKeyPasswordSms" != "1" ] && [ "$send2faSms" != "1" ]; then
+	if [ "$requiresKeyPassword" = "1" ]; then
+		echo "Для отправленных конфигов требуется пароль приватного ключа, но файл $pwdfile отсутствует или пуст — СМС с паролем не отправлено"
+	fi
+	if [ "$requires2fa" = "1" ]; then
+		echo "Для отправленных конфигов требуется 2FA, но файл $goofile отсутствует или пуст — СМС с ключом Google Authenticator не отправлено"
+	fi
+	exit 0
+fi
+
 #телефон нужен только для СМС
 if [ -n "$smsApiUrl" ]; then
 	invUser=`curl -k -s "$inventoryApiUrl/users/search?login=$sharee&expand=private_phone"`
@@ -252,33 +278,31 @@ if [ -n "$smsApiUrl" ]; then
 	echo "Пользователь $sharee найден в инвентори с сотовым $mobile -> $fixMobile"
 fi
 
-if [ -z "$smsApiUrl" ]; then
-	echo "smsApiUrl не задан в _config - СМС не отправляются (конфиги уже в Nextcloud)"
-	exit 0
-fi
-
-if [ "$sendKeyPasswordSms" != "1" ] && [ "$send2faSms" != "1" ]; then
-	echo "Для отправленных конфигов СМС с секретами не требуются"
-	exit 0
-fi
-
 if [ "$sendKeyPasswordSms" != "1" ]; then
-	echo "Пароль приватного ключа не требуется или недоступен - СМС с паролем не отправляется"
+	if [ "$requiresKeyPassword" = "1" ]; then
+		echo "Для отправленных конфигов требуется пароль приватного ключа, но файл $pwdfile отсутствует или пуст — СМС с паролем не отправлено"
+	else
+		echo "Для отправленных конфигов пароль приватного ключа не требуется — СМС с паролем не отправляется"
+	fi
 else
-pass=`cat $pwdfile`
-echo "СМС с паролем на конфиг ($pass) будет отправлена пользоватею $userLabel, на номер $fixMobile"
-echo "Для отмены нажмите Ctrl+C"
-for i in {5..1}; do
-	echo "Отпрвка через $i секунд..."
-	sleep 1
-done
-curl -k -s -G --data-urlencode "text=пароль на openvpn $pass" "$smsApiUrl/$fixMobile" 
-#> /dev/null
-echo "Готово"
+	pass=`cat $pwdfile`
+	echo "СМС с паролем на конфиг ($pass) будет отправлена пользоватею $userLabel, на номер $fixMobile"
+	echo "Для отмены нажмите Ctrl+C"
+	for i in {5..1}; do
+		echo "Отпрвка через $i секунд..."
+		sleep 1
+	done
+	curl -k -s -G --data-urlencode "text=пароль на openvpn $pass" "$smsApiUrl/$fixMobile"
+	#> /dev/null
+	echo "Готово"
 fi
 
 if [ "$send2faSms" != "1" ]; then
-	echo "2FA не требуется или секрет недоступен. Ключ от Google Authenticator не отправляем"
+	if [ "$requires2fa" = "1" ]; then
+		echo "Для отправленных конфигов требуется 2FA, но файл $goofile отсутствует или пуст — СМС с ключом Google Authenticator не отправлено"
+	else
+		echo "Для отправленных конфигов 2FA не требуется — СМС с ключом Google Authenticator не отправляется"
+	fi
 	exit 0
 fi
 
@@ -289,6 +313,6 @@ for i in {5..1}; do
 	echo "Отпрвка чере $i секунд..."
 	sleep 1
 done
-curl -k -s -G --data-urlencode "text=Ключ Google $pass" "$smsApiUrl/$fixMobile" 
+curl -k -s -G --data-urlencode "text=Ключ Google $pass" "$smsApiUrl/$fixMobile"
  #> /dev/null
 echo "Готово"
