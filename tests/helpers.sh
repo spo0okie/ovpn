@@ -66,6 +66,28 @@ function assertFileMissing() { #имя файл
 	fi
 }
 
+function assertContains() { #имя подстрока строка
+	checks=$((checks+1))
+	if echo "$3" | grep -qF -- "$2"; then
+		echo "  ok: $1"
+	else
+		echo "  FAIL: $1"
+		echo "    строка не содержит: $2"
+		failures=$((failures+1))
+	fi
+}
+
+function assertNotContains() { #имя подстрока строка
+	checks=$((checks+1))
+	if echo "$3" | grep -qF -- "$2"; then
+		echo "  FAIL: $1"
+		echo "    строка содержит запрещенное: $2"
+		failures=$((failures+1))
+	else
+		echo "  ok: $1"
+	fi
+}
+
 #создает чистую песочницу с заглушками curl/google-authenticator в PATH
 #результат в переменной $sandbox
 function newSandbox() {

@@ -20,7 +20,15 @@ inventoryApiUrl=https://inventory.test.local/api
 CFG
 	userdir=$ovpn/clients/tst-send1
 	mkdir -p $userdir
-	echo "FAKE CONF" > $userdir/tst_send1.ovpn
+	cat > $userdir/tst_send1.ovpn <<CONF
+client
+auth-user-pass
+<key>
+-----BEGIN ENCRYPTED PRIVATE KEY-----
+FAKE KEY
+-----END ENCRYPTED PRIVATE KEY-----
+</key>
+CONF
 	echo "SECRETPASS" > $userdir/passwd.txt
 	echo "GOOGLEKEY16CHARS" > $userdir/google.txt
 
@@ -32,6 +40,15 @@ CFG
 function runSend() {
 	( cd $ovpn && ./usr.send "$@" ) > $sandbox/out.log 2>&1
 	rc=$?
+}
+
+function extractMailBody() {
+	awk '
+		/Content-Type: text\/plain; charset=utf-8/ { text=1; next }
+		text && /Content-Transfer-Encoding: base64/ { body=1; next }
+		body && /^--ovpnPart/ { exit }
+		body { print }
+	' "$1" | base64 -d
 }
 
 echo "полный цикл доставки:"
@@ -103,8 +120,26 @@ assertFileContains "получатель из инвентори" $CURL_LOG "--m
 mimefile=$(ls $CURL_UPLOADS/upload.* | tail -1)
 assertFileContains "тема закодирована" $mimefile "Subject: =?UTF-8?B?"
 assertFileContains "вложение с конфигом" $mimefile 'filename="tst_send1.ovpn"'
-assertFileContains "содержимое конфига в base64" $mimefile "RkFLRSBDT05GCg=="
+confBase64=$(base64 "$userdir/tst_send1.ovpn" | head -n1)
+assertFileContains "содержимое конфига в base64" $mimefile "$confBase64"
 assertFileContains "СМС с паролем по-прежнему уходит" $CURL_LOG "text=пароль на openvpn SECRETPASS"
+mailbody=$(extractMailBody "$mimefile")
+assertContains "письмо сообщает о пароле ключа" "Для подключения потребуется пароль приватного ключа." "$mailbody"
+assertContains "письмо анонсирует СМС с паролем" "Пароль приватного ключа придёт отдельным СМС-сообщением." "$mailbody"
+assertContains "письмо сообщает о 2FA" "Для подключения потребуется код двухфакторной аутентификации." "$mailbody"
+assertContains "письмо анонсирует СМС с 2FA" "Секрет двухфакторной аутентификации придёт отдельным СМС-сообщением." "$mailbody"
+
+echo "почта: требования определяются по вложенному конфигу, не по файлам секретов:"
+deploySendMail
+printf 'client\n' > $userdir/tst_send1.ovpn
+runSend send1
+assertExitCode "успешное завершение" "0" "$rc"
+mimefile=$(ls $CURL_UPLOADS/upload.* | tail -1)
+mailbody=$(extractMailBody "$mimefile")
+assertNotContains "письмо не обещает пароль без зашифрованного ключа" "СМС-сообщением" "$mailbody"
+assertNotContains "пароль не отправлен для незашифрованного конфига" $CURL_LOG "text=пароль"
+assertNotContains "2FA-секрет не отправлен без auth-user-pass" $CURL_LOG "text=Ключ Google"
+assertFileNotContains "номер не запрашивается, когда СМС не нужны" $CURL_LOG "expand=private_phone"
 
 echo "прямой e-mail вторым аргументом:"
 deploySendMail

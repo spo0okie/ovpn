@@ -48,6 +48,26 @@ if [ -z "$confList" ]; then
 	exit 11
 fi
 
+#Определяем требования по фактически отправляемым конфигам, а не только по
+#наличию файлов с секретами: они могут остаться от предыдущей конфигурации.
+requiresKeyPassword=0
+requires2fa=0
+for conf in $confList; do
+	if sed -n '/<key>/,/<\/key>/p' "$conf" | grep -Eq 'ENCRYPTED|Proc-Type: 4,ENCRYPTED'; then
+		requiresKeyPassword=1
+	fi
+	if grep -Eq '^[[:space:]]*auth-user-pass([[:space:]]|$)' "$conf"; then
+		requires2fa=1
+	fi
+done
+
+#СМС анонсируем и отправляем только если соответствующий секрет нужен хотя
+#бы одному вложению и канал СМС с самим секретом доступен.
+sendKeyPasswordSms=0
+[ "$requiresKeyPassword" = "1" ] && [ -n "$smsApiUrl" ] && [ -s "$pwdfile" ] && sendKeyPasswordSms=1
+send2faSms=0
+[ "$requires2fa" = "1" ] && [ -n "$smsApiUrl" ] && [ -s "$goofile" ] && send2faSms=1
+
 if [ -n "$nextcloudUrl" ]; then
 
 #путь к файлохранилищу vpnBot
@@ -160,8 +180,20 @@ function mimeAttach() {
 	echo "Content-Type: text/plain; charset=utf-8"
 	echo "Content-Transfer-Encoding: base64"
 	echo
-	printf '%s' "Файлы конфигурации OpenVPN во вложении.
-Пароль ключа и код двухфакторной аутентификации (если используются) придут отдельным сообщением." | base64
+	mailText="Файлы конфигурации OpenVPN во вложении."
+	if [ "$requiresKeyPassword" = "1" ]; then
+		mailText="$mailText
+Для подключения потребуется пароль приватного ключа."
+		[ "$sendKeyPasswordSms" = "1" ] && mailText="$mailText
+Пароль приватного ключа придёт отдельным СМС-сообщением."
+	fi
+	if [ "$requires2fa" = "1" ]; then
+		mailText="$mailText
+Для подключения потребуется код двухфакторной аутентификации."
+		[ "$send2faSms" = "1" ] && mailText="$mailText
+Секрет двухфакторной аутентификации придёт отдельным СМС-сообщением."
+	fi
+	printf '%s' "$mailText" | base64
 	echo
 
 	#инструкции для пользователя (если приложены в send_files/)
@@ -225,8 +257,13 @@ if [ -z "$smsApiUrl" ]; then
 	exit 0
 fi
 
-if [ ! -s $pwdfile ]; then
-	echo "Файла с паролем нет (usePassKey не используется) - СМС с паролем не отправляется"
+if [ "$sendKeyPasswordSms" != "1" ] && [ "$send2faSms" != "1" ]; then
+	echo "Для отправленных конфигов СМС с секретами не требуются"
+	exit 0
+fi
+
+if [ "$sendKeyPasswordSms" != "1" ]; then
+	echo "Пароль приватного ключа не требуется или недоступен - СМС с паролем не отправляется"
 else
 pass=`cat $pwdfile`
 echo "СМС с паролем на конфиг ($pass) будет отправлена пользоватею $userLabel, на номер $fixMobile"
@@ -240,8 +277,8 @@ curl -k -s -G --data-urlencode "text=пароль на openvpn $pass" "$smsApiUr
 echo "Готово"
 fi
 
-if [ ! -s $goofile ]; then
-	echo "2FA не используется. Ключ от Гугл атунтификатора не отправляем"
+if [ "$send2faSms" != "1" ]; then
+	echo "2FA не требуется или секрет недоступен. Ключ от Google Authenticator не отправляем"
 	exit 0
 fi
 

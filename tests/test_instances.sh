@@ -9,7 +9,8 @@ function deployInstances() {
 	ovpn=$sandbox/ovpn
 	mkdir -p $ovpn
 	cp $REPO_DIR/usr.new $REPO_DIR/usr.gen.ccd $REPO_DIR/usr.publish \
-	   $REPO_DIR/usr.enable $REPO_DIR/usr.disable $REPO_DIR/_lib $REPO_DIR/_lib.inv $ovpn/
+	   $REPO_DIR/usr.enable $REPO_DIR/usr.disable $REPO_DIR/usr.ccd2env \
+	   $REPO_DIR/_lib $REPO_DIR/_lib.inv $ovpn/
 	cat > $ovpn/_config <<CFG
 org=TestOrg
 prefix=tst
@@ -184,5 +185,28 @@ curlRoute "net-ips/search?name=ovpn-u9" '{"text_addr":"10.64.68.15"}'
 ( cd $ovpn && ./usr.gen.ccd u9 ) >/dev/null 2>&1
 assertFileExists "CCD без суффикса (ccd)" $ovpn/clients/tst-u9/ccd
 assertFileMissing "нет ccd.local в одиночном режиме" $ovpn/clients/tst-u9/ccd.local
+
+echo "usr.ccd2env - вывод IP из CCD всех инстансов:"
+deployInstances
+mkdir -p $ovpn/ccd $ovpn/ccd-2fa
+printf 'ifconfig-push 10.32.0.50 255.255.255.0\n' > $ovpn/ccd/u10
+printf 'ifconfig-push 10.132.0.51 255.255.255.0\n' > $ovpn/ccd-2fa/u10
+printf 'ifconfig-push 10.32.0.52 255.255.255.0\n' > $ovpn/ccd/u11
+out=$sandbox/ccd.env
+( cd $ovpn && ./usr.ccd2env $out ) >/dev/null 2>&1
+assertExitCode "успешное завершение" "0" "$?"
+assertFileContains "local инстанс: пользователь u10" $out "local_u10=10.32.0.50"
+assertFileContains "2fa инстанс: пользователь u10" $out "local_2fa_u10=10.132.0.51"
+assertFileContains "local инстанс: пользователь u11" $out "local_u11=10.32.0.52"
+assertFileContains "заголовок bash-файла" $out "#!/bin/bash"
+
+echo "usr.ccd2env - вывод в stdout:"
+deployInstances
+mkdir -p $ovpn/ccd
+printf 'ifconfig-push 10.32.0.60 255.255.255.0\n' > $ovpn/ccd/u12
+out=$(cd $ovpn && ./usr.ccd2env)
+assertExitCode "успешное завершение" "0" "${PIPESTATUS[0]}"
+assertContains "stdout: local_u12" "$out" "local_u12=10.32.0.60"
+assertNotContains "stdout без заголовка" "$out" "#!/bin/bash"
 
 summarize
