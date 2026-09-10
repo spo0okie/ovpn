@@ -3,36 +3,72 @@
 #пишет аргументы вызова в $CURL_LOG
 #отвечает по таблице $CURL_ROUTES (строки: подстрока_URL<TAB>файл_ответа),
 #на неизвестный URL отвечает {}
+#файл ответа может начинаться со служебной строки:
+#  FAIL:<текст>  - имитация отказа соединения (curl exit 7, текст в stderr)
+#  HTTP:<код>    - HTTP-код ответа (по умолчанию 200), тело - остальные строки
+#поддерживает -o <файл> (тело в файл) и -w <формат> (только %{http_code})
 
 echo "$@" >> "${CURL_LOG:-/dev/null}"
 
-#сохранить тело -T загрузки для проверок (в $CURL_UPLOADS)
-prev=""
+url=""
+outfile=""
+wfmt=""
 upfile=""
+prev=""
 for a in "$@"; do
+	case "$a" in
+		http://*|https://*) url=$a;;
+	esac
+	[ "$prev" == "-o" ] && outfile=$a
+	[ "$prev" == "-w" ] && wfmt=$a
 	[ "$prev" == "-T" ] && upfile=$a
 	prev=$a
 done
+
+#сохранить тело -T загрузки для проверок (в $CURL_UPLOADS)
 if [ -n "$upfile" ] && [ -n "$CURL_UPLOADS" ] && [ -f "$upfile" ]; then
 	mkdir -p "$CURL_UPLOADS"
 	n=$(ls "$CURL_UPLOADS" 2>/dev/null | wc -l)
 	cp "$upfile" "$CURL_UPLOADS/upload.$n"
 fi
 
-url=""
-for a in "$@"; do
-	case "$a" in
-		http://*|https://*) url=$a;;
-	esac
-done
+#выдать тело из файла $1 с HTTP-кодом $2 с учетом -o и -w
+function emit() {
+	if [ -n "$outfile" ]; then
+		cat "$1" > "$outfile"
+	else
+		cat "$1"
+	fi
+	if [ -n "$wfmt" ]; then
+		printf '%s' "${wfmt//%\{http_code\}/$2}"
+	fi
+}
 
 if [ -n "$CURL_ROUTES" ] && [ -f "$CURL_ROUTES" ]; then
 	while IFS=$'\t' read -r pattern respfile; do
 		[ -z "$pattern" ] && continue
 		case "$url" in
-			*"$pattern"*) cat "$respfile"; exit 0;;
+			*"$pattern"*)
+				first=$(head -n1 "$respfile")
+				case "$first" in
+					FAIL:*)
+						echo "curl: (7) ${first#FAIL:}" >&2
+						exit 7
+					;;
+					HTTP:*)
+						tmp=$(mktemp)
+						tail -n +2 "$respfile" > "$tmp"
+						emit "$tmp" "${first#HTTP:}"
+						exit 0
+					;;
+				esac
+				emit "$respfile" 200
+				exit 0
+			;;
 		esac
 	done < "$CURL_ROUTES"
 fi
 
-echo '{}'
+tmp=$(mktemp)
+echo '{}' > "$tmp"
+emit "$tmp" 200

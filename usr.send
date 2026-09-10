@@ -297,6 +297,30 @@ if [ -n "$smsApiUrl" ]; then
 	echo "Пользователь $sharee найден в инвентори с сотовым $mobile -> $fixMobile"
 fi
 
+#отправка СМС на $fixMobile: $1 - текст. Проверяются и результат curl
+#(закрытый порт, DNS), и HTTP-код шлюза - раньше оба случая проходили молча
+smsFailed=0
+function sendSms() {
+	local bodyf errf code rc
+	bodyf=`mktemp`
+	errf=`mktemp`
+	code=$(curl -k -sS -G --data-urlencode "text=$1" -o "$bodyf" -w '%{http_code}' "$smsApiUrl/$fixMobile" 2>"$errf")
+	rc=$?
+	if [ $rc -ne 0 ]; then
+		echo "ОШИБКА: СМС не отправлена - шлюз $smsApiUrl недоступен: $(cat $errf)"
+		rm -f $bodyf $errf
+		return 1
+	fi
+	if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+		echo "ОШИБКА: СМС не отправлена - шлюз ответил HTTP $code: $(head -c 300 $bodyf)"
+		rm -f $bodyf $errf
+		return 1
+	fi
+	echo "СМС отправлена (HTTP $code): $(head -c 200 $bodyf)"
+	rm -f $bodyf $errf
+	return 0
+}
+
 if [ "$sendKeyPasswordSms" != "1" ]; then
 	if [ "$requiresKeyPassword" = "1" ]; then
 		echo "Для отправленных конфигов требуется пароль приватного ключа, но файл $pwdfile отсутствует или пуст — СМС с паролем не отправлено"
@@ -311,9 +335,7 @@ else
 		echo "Отпрвка через $i секунд..."
 		sleep 1
 	done
-	curl -k -s -G --data-urlencode "text=пароль на openvpn $pass" "$smsApiUrl/$fixMobile"
-	#> /dev/null
-	echo "Готово"
+	sendSms "пароль на openvpn $pass" || smsFailed=1
 fi
 
 if [ "$send2faSms" != "1" ]; then
@@ -322,16 +344,18 @@ if [ "$send2faSms" != "1" ]; then
 	else
 		echo "Для отправленных конфигов 2FA не требуется — СМС с ключом Google Authenticator не отправляется"
 	fi
-	exit 0
+else
+	pass=`cat $goofile | head -n 1`
+	echo "СМС с ключом Google ($pass) будет отправлена пользоватею $userLabel, на номер $fixMobile"
+	echo "Для отмены нажмите Ctrl+C"
+	for i in {5..1}; do
+		echo "Отпрвка чере $i секунд..."
+		sleep 1
+	done
+	sendSms "Ключ Google $pass" || smsFailed=1
 fi
 
-pass=`cat $goofile | head -n 1`
-echo "СМС с ключом Google ($pass) будет отправлена пользоватею $userLabel, на номер $fixMobile"
-echo "Для отмены нажмите Ctrl+C"
-for i in {5..1}; do
-	echo "Отпрвка чере $i секунд..."
-	sleep 1
-done
-curl -k -s -G --data-urlencode "text=Ключ Google $pass" "$smsApiUrl/$fixMobile"
- #> /dev/null
-echo "Готово"
+if [ "$smsFailed" = "1" ]; then
+	echo "ВНИМАНИЕ: не все СМС отправлены - без секретов пользователь конфигом воспользоваться не сможет"
+	exit 40
+fi

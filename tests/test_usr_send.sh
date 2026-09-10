@@ -236,4 +236,27 @@ assertExitCode "успешное завершение" "0" "$rc"
 assertFileContains "конфиг main выгружен" $CURL_LOG "openvpn/send1/tst_send1_main.ovpn"
 assertFileNotContains "конфиг main-2fa не выгружался" $CURL_LOG "openvpn/send1/tst_send1_main-2fa.ovpn"
 
+echo "СМС: успех подтверждается кодом шлюза:"
+deploySend
+runSend send1
+assertExitCode "успешное завершение" "0" "$rc"
+assertFileContains "успех СМС виден в выводе" $sandbox/out.log "СМС отправлена (HTTP 200)"
+
+echo "СМС: порт шлюза закрыт - ошибка явная, код 40:"
+deploySend
+curlRoute "sms/send" "$(printf 'FAIL:Failed to connect to sms.test.local port 443: Connection refused')"
+runSend send1
+assertExitCode "выход с кодом 40" "40" "$rc"
+assertFileContains "причина в выводе" $sandbox/out.log "ОШИБКА: СМС не отправлена - шлюз https://sms.test.local/sms/send недоступен: curl: (7) Failed to connect"
+assertFileContains "итоговое предупреждение" $sandbox/out.log "ВНИМАНИЕ: не все СМС отправлены"
+assertFileContains "шара при этом выдана" $CURL_LOG "shareWith=UUID-1"
+
+echo "СМС: шлюз ответил ошибкой - код 40:"
+deploySend
+curlRoute "sms/send" "$(printf 'HTTP:500
+gateway error')"
+runSend send1
+assertExitCode "выход с кодом 40" "40" "$rc"
+assertFileContains "HTTP-код и тело в выводе" $sandbox/out.log "шлюз ответил HTTP 500: gateway error"
+
 summarize
