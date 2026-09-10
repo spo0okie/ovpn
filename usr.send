@@ -5,8 +5,12 @@
 # mailSmtpUrl  - отправка на почту (когда Nextcloud недоступен снаружи)
 # smsApiUrl    - СМС с паролем ключа и секретом 2FA (вторым каналом)
 # $1 - имя конфига
-# $2 - (опционально) логин получателя, если отличается от имени конфига,
-#      либо прямой e-mail (с @) для почтовой доставки
+# $2,$3 - (опционально, в любом порядке):
+#      имя инстанса из $instances - отправить конфиги только этого инстанса
+#      (имя инстанса распознается раньше логина - логин, совпадающий с
+#      именем инстанса, передать нельзя);
+#      прямой e-mail (с @) - адрес почтовой доставки;
+#      иначе - логин получателя, если отличается от имени конфига
 
 if [ -z "$1" ]; then
     echo "No username given"
@@ -28,24 +32,43 @@ goofile=$userdir/google.txt
 
 sharee=$1
 rcptEmail=""
-if [ -n "$2" ]; then
-	if [[ "$2" == *"@"* ]]; then
-		rcptEmail=$2
+sendInstance=""
+knownInstances=" $(getInstances) "
+for arg in "$2" "$3"; do
+	[ -z "$arg" ] && continue
+	if [[ "$arg" == *"@"* ]]; then
+		rcptEmail=$arg
+	elif [[ "$knownInstances" == *" $arg "* ]]; then
+		sendInstance=$arg
 	else
-		sharee=$2
+		sharee=$arg
 	fi
-fi
-
-#все сгенерированные конфиги пользователя (usr.new сам создает конфиг
-#на каждый инстанс, так что в папке только актуальные)
-confList=""
-for conf in $userdir/*.ovpn; do
-	[ -e "$conf" ] || continue
-	confList="$confList $conf"
 done
-if [ -z "$confList" ]; then
-	echo "У пользователя $1 нет ни одного .ovpn конфига - нечего отправлять"
-	exit 11
+
+confList=""
+if [ -n "$sendInstance" ]; then
+	#только конфиги указанного инстанса. Точные имена, глобом нельзя:
+	#имена инстансов пересекаются по префиксу (local и local-2fa)
+	confBase=$userdir/${prefix}_$1$(instFileSuffix _ "$sendInstance")
+	for conf in "$confBase.ovpn" "${confBase}_connect.ovpn"; do
+		[ -e "$conf" ] || continue
+		confList="$confList $conf"
+	done
+	if [ -z "$confList" ]; then
+		echo "У пользователя $1 нет конфигов инстанса $sendInstance - нечего отправлять"
+		exit 11
+	fi
+else
+	#все сгенерированные конфиги пользователя (usr.new сам создает конфиг
+	#на каждый инстанс, так что в папке только актуальные)
+	for conf in $userdir/*.ovpn; do
+		[ -e "$conf" ] || continue
+		confList="$confList $conf"
+	done
+	if [ -z "$confList" ]; then
+		echo "У пользователя $1 нет ни одного .ovpn конфига - нечего отправлять"
+		exit 11
+	fi
 fi
 
 #Определяем требования по фактически отправляемым конфигам, а не только по
@@ -170,7 +193,9 @@ function mimeAttach() {
 {
 	echo "From: $mailFrom"
 	echo "To: $rcptEmail"
-	echo "Subject: =?UTF-8?B?$(printf '%s' "Конфигурация OpenVPN ($1)" | base64 -w0)?="
+	mailTopic="Конфигурация OpenVPN ($1)"
+	[ -n "$sendInstance" ] && mailTopic="Конфигурация OpenVPN ($1, $sendInstance)"
+	echo "Subject: =?UTF-8?B?$(printf '%s' "$mailTopic" | base64 -w0)?="
 	echo "Date: $(date -R)"
 	echo "Message-ID: <ovpn-$1-$(date +%s)-$RANDOM@$(hostname)>"
 	echo "MIME-Version: 1.0"

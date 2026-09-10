@@ -176,4 +176,78 @@ assertExitCode "успешное завершение" "0" "$rc"
 assertFileContains "выгрузка в Nextcloud была" $CURL_LOG "MKCOL"
 assertFileNotContains "почта не использовалась" $CURL_LOG "mail-rcpt"
 
+#инстанс-модель: main (без секретов) + main-2fa (зашифрованный ключ + 2FA)
+function deploySendInstances() {
+	deploySendMail
+	cat >> $ovpn/_config <<CFG
+instances="main main-2fa"
+main_addr=ovpn.test.local
+main_2fa_addr=ovpn2fa.test.local
+main_2fa_auth_mode=2fa
+CFG
+	rm -f $userdir/tst_send1.ovpn
+	cat > $userdir/tst_send1_main.ovpn <<CONF
+client
+<key>
+FAKE PLAIN KEY
+</key>
+CONF
+	cat > $userdir/tst_send1_main-2fa.ovpn <<CONF
+client
+auth-user-pass
+<key>
+-----BEGIN ENCRYPTED PRIVATE KEY-----
+FAKE KEY
+-----END ENCRYPTED PRIVATE KEY-----
+</key>
+CONF
+}
+
+echo "инстанс: отправка только конфигов main-2fa:"
+deploySendInstances
+runSend send1 main-2fa
+assertExitCode "успешное завершение" "0" "$rc"
+mimefile=$(ls $CURL_UPLOADS/upload.* | tail -1)
+assertFileContains "вложение конфига main-2fa" $mimefile 'filename="tst_send1_main-2fa.ovpn"'
+assertFileNotContains "конфиг main не вложен" $mimefile 'filename="tst_send1_main.ovpn"'
+assertFileContains "тема с именем инстанса" $mimefile "$(printf '%s' "Конфигурация OpenVPN (send1, main-2fa)" | base64 -w0)"
+assertFileContains "СМС с паролем (ключ зашифрован)" $CURL_LOG "text=пароль на openvpn SECRETPASS"
+assertFileContains "СМС с ключом 2FA (auth-user-pass)" $CURL_LOG "text=Ключ Google"
+
+echo "инстанс: у main нет секретов - СМС не отправляются:"
+deploySendInstances
+runSend send1 main
+assertExitCode "успешное завершение" "0" "$rc"
+mimefile=$(ls $CURL_UPLOADS/upload.* | tail -1)
+assertFileContains "вложение конфига main" $mimefile 'filename="tst_send1_main.ovpn"'
+assertFileNotContains "конфиг main-2fa не вложен" $mimefile 'filename="tst_send1_main-2fa.ovpn"'
+assertFileNotContains "СМС не отправлялись" $CURL_LOG "sms/send"
+
+echo "инстанс + прямой e-mail в любом порядке:"
+deploySendInstances
+runSend send1 direct@example.com main
+assertExitCode "успешное завершение" "0" "$rc"
+assertFileContains "письмо на указанный адрес" $CURL_LOG "--mail-rcpt direct@example.com"
+mimefile=$(ls $CURL_UPLOADS/upload.* | tail -1)
+assertFileNotContains "фильтр по инстансу применен" $mimefile 'filename="tst_send1_main-2fa.ovpn"'
+
+echo "инстанс: конфигов нет - код 11:"
+deploySendInstances
+rm $userdir/tst_send1_main-2fa.ovpn
+runSend send1 main-2fa
+assertExitCode "выход с кодом 11" "11" "$rc"
+assertFileContains "понятное сообщение" $sandbox/out.log "нет конфигов инстанса main-2fa"
+
+echo "инстанс: nextcloud выгружает только его конфиги:"
+deploySendInstances
+cat >> $ovpn/_config <<CFG
+nextcloudUrl=https://cloud.test.local
+CFG
+curlRoute "sharees?format=json" '{"ocs":{"data":{"exact":{"users":[{"label":"Send One (send1)","value":{"shareWith":"UUID-1"},"shareWithDisplayNameUnique":"s@x"}]},"users":[]}}}'
+curlRoute "dav/files/UID/openvpn/send1" '<d:href>/remote.php/dav/files/UID/openvpn/send1/tst_send1_main.ovpn</d:href>' 
+runSend send1 main
+assertExitCode "успешное завершение" "0" "$rc"
+assertFileContains "конфиг main выгружен" $CURL_LOG "openvpn/send1/tst_send1_main.ovpn"
+assertFileNotContains "конфиг main-2fa не выгружался" $CURL_LOG "openvpn/send1/tst_send1_main-2fa.ovpn"
+
 summarize
