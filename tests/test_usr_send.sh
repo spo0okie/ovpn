@@ -145,12 +145,6 @@ assertNotContains "2FA-секрет не отправлен без auth-user-pas
 assertFileNotContains "номер не запрашивается, когда СМС не нужны" $CURL_LOG "expand=private_phone"
 assertFileContains "явно сказано, что секреты не нужны" $sandbox/out.log "передача секретов не требуется"
 
-echo "прямой e-mail вторым аргументом:"
-deploySendMail
-runSend send1 direct@example.com
-assertExitCode "успешное завершение" "0" "$rc"
-assertFileContains "письмо на указанный адрес" $CURL_LOG "--mail-rcpt direct@example.com"
-
 echo "smtp:// с авторизацией - принудительный STARTTLS:"
 deploySendMail
 sed -i 's|mailSmtpUrl=.*|mailSmtpUrl=smtp://smtp.cloud.test:587|' $ovpn/_config
@@ -222,14 +216,6 @@ mimefile=$(ls $CURL_UPLOADS/upload.* | tail -1)
 assertFileContains "вложение конфига main" $mimefile 'filename="tst_send1_main.ovpn"'
 assertFileNotContains "конфиг main-2fa не вложен" $mimefile 'filename="tst_send1_main-2fa.ovpn"'
 assertFileNotContains "СМС не отправлялись" $CURL_LOG "sms/send"
-
-echo "инстанс + прямой e-mail в любом порядке:"
-deploySendInstances
-runSend send1 direct@example.com main
-assertExitCode "успешное завершение" "0" "$rc"
-assertFileContains "письмо на указанный адрес" $CURL_LOG "--mail-rcpt direct@example.com"
-mimefile=$(ls $CURL_UPLOADS/upload.* | tail -1)
-assertFileNotContains "фильтр по инстансу применен" $mimefile 'filename="tst_send1_main-2fa.ovpn"'
 
 echo "инстанс: конфигов нет - код 11:"
 deploySendInstances

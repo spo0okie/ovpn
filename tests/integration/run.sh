@@ -175,32 +175,6 @@ assertExitCode "конфиг для OpenVPN Connect поднимает тунн�
 srv "sed -i '/usePassKey/d;/makeConnectConf/d' /etc/openvpn/_config"
 
 
-echo "== 7. Доставка конфигов по почте (mailpit)"
-srv "printf 'mailSmtpUrl=smtp://mailpit:1025
-mailFrom=vpn@test.local
-' >> /etc/openvpn/_config"
-srv "cd /etc/openvpn && ./usr.send secure1 secure1@test.local"
-assertExitCode "usr.send отправил письмо" "0" "$?"
-
-srv "curl -s http://mailpit:8025/api/v1/messages | jq -e '.total >= 1' >/dev/null"
-assertExitCode "письмо дошло до SMTP-сервера" "0" "$?"
-
-mailid=$(srv "curl -s http://mailpit:8025/api/v1/messages | jq -r '.messages[0].ID'" | tr -d ' 
-')
-srv "curl -s http://mailpit:8025/api/v1/message/$mailid | jq -r '.To[0].Address' | grep -q secure1@test.local"
-assertExitCode "получатель верный" "0" "$?"
-
-srv "curl -s http://mailpit:8025/api/v1/message/$mailid | jq -r '.Attachments[].FileName' | grep -q '^tst_secure1.ovpn$'"
-assertExitCode "конфиг во вложении" "0" "$?"
-
-partid=$(srv "curl -s http://mailpit:8025/api/v1/message/$mailid | jq -r '.Attachments[] | select(.FileName==\"tst_secure1.ovpn\").PartID'" | tr -d ' 
-')
-srv "curl -s http://mailpit:8025/api/v1/message/$mailid/part/$partid -o /tmp/att.ovpn && diff /tmp/att.ovpn /etc/openvpn/clients/tst-secure1/tst_secure1.ovpn"
-assertExitCode "вложение побайтово совпадает с конфигом" "0" "$?"
-
-srv "sed -i '/mailSmtpUrl/d;/mailFrom/d' /etc/openvpn/_config"
-
-
 if [ "$WITH_INVENTORY" == "1" ]; then
 	echo "== 8. Интеграция с настоящей инвентори (arms)"
 	srv "bash $INSIDE/seed-inventory.sh"
@@ -234,6 +208,31 @@ if [ "$WITH_INVENTORY" == "1" ]; then
 	srv "cp /etc/openvpn/clients/tst-inv1/tst_inv1.ovpn /shared/"
 	cli $INSIDE/connect.sh /shared/tst_inv1.ovpn success "src $addr1"
 	assertExitCode "клиент поднял туннель с адресом из инвентори" "0" "$?"
+
+	echo "== 7. Доставка конфигов по почте (mailpit, адрес из инвентори)"
+	srv "printf 'mailSmtpUrl=smtp://mailpit:1025
+mailFrom=vpn@test.local
+' >> /etc/openvpn/_config"
+	srv "cd /etc/openvpn && ./usr.send inv1"
+	assertExitCode "usr.send отправил письмо" "0" "$?"
+
+	srv "curl -s http://mailpit:8025/api/v1/messages | jq -e '.total >= 1' >/dev/null"
+	assertExitCode "письмо дошло до SMTP-сервера" "0" "$?"
+
+	mailid=$(srv "curl -s http://mailpit:8025/api/v1/messages | jq -r '.messages[0].ID'" | tr -d ' 
+')
+	srv "curl -s http://mailpit:8025/api/v1/message/$mailid | jq -r '.To[0].Address' | grep -q inv1@test.local"
+	assertExitCode "получатель взят из инвентори" "0" "$?"
+
+	srv "curl -s http://mailpit:8025/api/v1/message/$mailid | jq -r '.Attachments[].FileName' | grep -q '^tst_inv1.ovpn$'"
+	assertExitCode "конфиг во вложении" "0" "$?"
+
+	partid=$(srv "curl -s http://mailpit:8025/api/v1/message/$mailid | jq -r '.Attachments[] | select(.FileName==\"tst_inv1.ovpn\").PartID'" | tr -d ' 
+')
+	srv "curl -s http://mailpit:8025/api/v1/message/$mailid/part/$partid -o /tmp/att.ovpn && diff /tmp/att.ovpn /etc/openvpn/clients/tst-inv1/tst_inv1.ovpn"
+	assertExitCode "вложение побайтово совпадает с конфигом" "0" "$?"
+
+	srv "sed -i '/mailSmtpUrl/d;/mailFrom/d' /etc/openvpn/_config"
 fi
 
 echo "== 9. Один хост, два инстанса (обычный + 2FA)"

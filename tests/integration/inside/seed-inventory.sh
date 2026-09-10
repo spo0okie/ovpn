@@ -34,7 +34,7 @@ curl -s -d "text_addr=192.168.77.1&name=ovpn-server-gw" -X POST $api/net-ips/cre
 
 #пользователи с Login = имени конфига (usr.new привязывает IP по этому логину)
 for u in inv1 inv2; do
-	usr=$(curl -s -d "Login=$u&Ename=Test $u&Persg=1&Uvolen=0" -X POST $api/users/create)
+	usr=$(curl -s -d "Login=$u&Ename=Test $u&Persg=1&Uvolen=0&Email=$u@test.local" -X POST $api/users/create)
 	if ! echo "$usr" | jq -e '.id != null' >/dev/null 2>&1; then
 		echo "FAIL: пользователь $u не создан: $usr"
 		exit 1

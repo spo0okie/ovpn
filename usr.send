@@ -9,7 +9,6 @@
 #      имя инстанса из $instances - отправить конфиги только этого инстанса
 #      (имя инстанса распознается раньше логина - логин, совпадающий с
 #      именем инстанса, передать нельзя);
-#      прямой e-mail (с @) - адрес почтовой доставки;
 #      иначе - логин получателя, если отличается от имени конфига
 
 if [ -z "$1" ]; then
@@ -31,14 +30,11 @@ pwdfile=$userdir/passwd.txt
 goofile=$userdir/google.txt
 
 sharee=$1
-rcptEmail=""
 sendInstance=""
 knownInstances=" $(getInstances) "
 for arg in "$2" "$3"; do
 	[ -z "$arg" ] && continue
-	if [[ "$arg" == *"@"* ]]; then
-		rcptEmail=$arg
-	elif [[ "$knownInstances" == *" $arg "* ]]; then
+	if [[ "$knownInstances" == *" $arg "* ]]; then
 		sendInstance=$arg
 	else
 		sharee=$arg
@@ -157,15 +153,13 @@ echo "Config share - Готово"
 else
 #================= доставка почтой =================
 
-#адрес получателя: из аргумента (с @) либо из инвентори по логину
-if [ -z "$rcptEmail" ]; then
-	invUserMail=`curl -k -s "$inventoryApiUrl/users/search?login=$sharee"`
-	rcptEmail=`echo $invUserMail|jq -r .Email`
-	if [ "$rcptEmail" == "null" ] || [ -z "$rcptEmail" ]; then
-		echo "не могу найти e-mail для пользователя $sharee - отправка почтой невозможна"
-		echo "проверь что такой пользователь есть в инвентори и у него прописан e-mail"
-		exit 31
-	fi
+#адрес получателя - из инвентори по логину
+invUserMail=`curl -k -s "$inventoryApiUrl/users/search?login=$sharee"`
+rcptEmail=`echo $invUserMail|jq -r .Email`
+if [ "$rcptEmail" == "null" ] || [ -z "$rcptEmail" ]; then
+	echo "не могу найти e-mail для пользователя $sharee - отправка почтой невозможна"
+	echo "проверь что такой пользователь есть в инвентори и у него прописан e-mail"
+	exit 31
 fi
 
 mailFrom=${mailFrom:-$mailUser}

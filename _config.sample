@@ -84,7 +84,6 @@ inventoryApiUrl=https://inventory.sampleOrg.local/web/api
 #smtps:// - неявный TLS (465); smtp://host:587 - STARTTLS (принуждается
 #автоматически при заданном mailUser; mailInsecure=1 отключает для
 #внутренних релеев). адрес получателя берется из инвентори (Email)
-#или вторым аргументом usr.send
 #mailSmtpUrl=smtps://smtp.provider.com:465
 #mailUser=vpn@sampleorg.ru
 #mailPassword=SmtpSecret
