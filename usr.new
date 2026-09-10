@@ -5,19 +5,21 @@ if [ -z "$1" ]; then
     exit
 fi
 
+#подключаем конфиг и либы
 SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )" #"
 . $SCRIPTPATH/_config
 . $SCRIPTPATH/_lib
 . $SCRIPTPATH/_lib.inv
 
 
-
+#если надо сгенерит CA
 if [ $1 = ca ]; then
 	openssl x509 -in ./ca.pem -days 3650 -out ca_new.pem -signkey ./ca.key
 	echo "New CA certificate stored in ca_new.pem"
 	exit
 fi
 
+#если надо сгенерить серверный серт
 if [ $1 = serv ]; then
 	openssl genrsa -out ${prefix}-$1.key
 	echo -e "RU\nUral\nChel\n$org\nIT\n$srvname\n\n\n" |openssl req -config $sslconf -new -nodes -key ${prefix}-$1.key -out ${prefix}-$1.csr -sha256
@@ -25,9 +27,11 @@ if [ $1 = serv ]; then
 	exit
 fi
 
-
+#генерим пользователя
 user=$1
 shift
+
+#грузим остальные параметры
 instance=""
 noupdate=""
 for arg in "$@"; do
@@ -42,6 +46,7 @@ done
 cipher=`cat $ovpndir/server.conf 2>/dev/null | grep -E "^cipher" | cut -d ' ' -f2`
 [ -z "$cipher" ] && cipher=${cipher:-AES-256-CBC}
 
+#общие для всех инстансов пути
 userdir=$ovpndir/clients/$prefix-$user
 keyfile=$userdir/${prefix}_$user.key
 certfile=$userdir/${prefix}_$user.crt
@@ -70,6 +75,7 @@ else
 	passinOpt=""
 fi
 
+#ключ к сертификату
 if [ -s $keyfile ]; then
 	echo "keyfile already exists"
 else
@@ -81,6 +87,7 @@ else
 	fi
 fi
 
+#сертификат
 if [ -s $certfile ]; then
 	echo "cert file already exists"
 else

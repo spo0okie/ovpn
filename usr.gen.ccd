@@ -15,13 +15,17 @@ if [ -z "$1" ]; then
 	exit
 fi
 
+#подключаем конфиг и либы
 SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )" #"
 . $SCRIPTPATH/_config
 . $SCRIPTPATH/_lib
 . $SCRIPTPATH/_lib.inv
 
+#грузим пользователя
 user=$1
 shift
+
+#грузим остальные параметры
 instance=""
 noupdate=""
 for arg in "$@"; do
