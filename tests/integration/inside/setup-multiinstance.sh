@@ -80,7 +80,7 @@ if ! grep -qF 'client-config-dir /etc/openvpn/ccd-2fa' server-local-2fa.conf; th
 	echo "FAIL: server-local-2fa.conf: нет отдельного client-config-dir"
 	exit 1
 fi
-if ! grep -qF 'plugin' server-local-2fa.conf | grep -q 'openvpn-plugin-auth-pam.so'; then
+if ! grep -qE '^plugin .*openvpn-plugin-auth-pam\.so' server-local-2fa.conf; then
 	echo "FAIL: server-local-2fa.conf: нет PAM-плагина"
 	exit 1
 fi
