@@ -118,6 +118,21 @@ assertFileContains "2FA-конфиг: auth-nocache" $ovpn/clients/tst-u5/tst_u5_
 assertFileContains "2FA-конфиг: reneg-sec 0" $ovpn/clients/tst-u5/tst_u5_local-2fa.ovpn "reneg-sec 0"
 assertFileContains "секрет 2FA создан" $ovpn/clients/tst-u5/google.txt "TESTSECRET234567"
 
+echo "usr.new - conf_prefix инстанса:"
+deployInstances
+makeUser cp1
+cat >> $ovpn/_config <<CFG
+local_conf_prefix=""
+local_2fa_conf_prefix="tst2fa_"
+CFG
+curlRoute "net-ips/search?name=ovpn-cp1" '{"text_addr":"10.32.0.12"}'
+curlRoute "net-ips/search?name=ovpn2fa-cp1" '{"text_addr":"10.132.0.12"}'
+( cd $ovpn && ./usr.new cp1 ) > $sandbox/out.log 2>&1
+assertExitCode "успешное завершение" "0" "$?"
+assertFileExists "пустой префикс - имя с CN" $ovpn/clients/tst-cp1/cp1_local.ovpn
+assertFileExists "свой префикс 2FA-инстанса" $ovpn/clients/tst-cp1/tst2fa_cp1_local-2fa.ovpn
+assertFileMissing "конфиг с дефолтным префиксом не создан" $ovpn/clients/tst-cp1/tst_cp1_local-2fa.ovpn
+
 echo "usr.publish - local: симлинк в ccd_dir инстанса:"
 deployInstances
 u=$ovpn/clients/tst-u6

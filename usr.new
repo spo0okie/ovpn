@@ -126,9 +126,9 @@ for inst in $instances_list; do
 		need2fa=1
 	fi
 
-	confSuffix=$(instFileSuffix _ "$inst")
-	CONF=$userdir/${prefix}_${user}${confSuffix}.ovpn
-	CONNCONF=$userdir/${prefix}_${user}${confSuffix}_connect.ovpn
+	confBase=$userdir/$(instConfPrefix "$inst")${user}$(instFileSuffix _ "$inst")
+	CONF=$confBase.ovpn
+	CONNCONF=${confBase}_connect.ovpn
 
 	inst_addr=$(inst_var $inst addr)
 	inst_port=$(inst_var $inst port)

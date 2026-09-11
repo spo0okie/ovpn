@@ -75,6 +75,15 @@ assertEquals "ccd_suffix пустой - ccd без суффикса" "/tmp/ovpn-
 assertEquals "ccd_suffix .2fa" "/tmp/ovpn-test/clients/tst-u/ccd.2fa" "`getConfigCcd u main-2fa`"
 assertEquals "ccd_suffix без переопределения - .local-2fa" "/tmp/ovpn-test/clients/tst-u/ccd.local-2fa" "`getConfigCcd u local-2fa`"
 unset main_ccd_suffix main_2fa_ccd_suffix
+
+echo "instConfPrefix: префикс имени клиентского конфига:"
+assertEquals "по умолчанию - <prefix>_" "tst_" "`instConfPrefix main`"
+main_conf_prefix=""
+main_2fa_conf_prefix="tst2fa_"
+assertEquals "conf_prefix пустой - без префикса" "" "`instConfPrefix main`"
+assertEquals "conf_prefix tst2fa_ ('-' -> '_')" "tst2fa_" "`instConfPrefix main-2fa`"
+assertEquals "conf_prefix без переопределения - <prefix>_" "tst_" "`instConfPrefix local-2fa`"
+unset main_conf_prefix main_2fa_conf_prefix
 unset instances
 
 echo "_lib.inv: получение IP (через заглушку curl):"

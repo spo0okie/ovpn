@@ -130,3 +130,6 @@ inventoryApiUrl=https://inventory.sampleOrg.local/web/api
 # Пустая строка - CCD без суффикса (как в legacy single):
 #   main_ccd_suffix=""          # -> ccd
 #   main_2fa_ccd_suffix=".2fa"  # -> ccd.2fa
+# <instance>_conf_prefix - префикс имени клиентского конфига в папке пользователя
+# (по умолчанию "<prefix>_"). Пустая строка - имя начинается сразу с CN:
+#   main_2fa_conf_prefix="sample2fa_"  # -> sample2fa_<CN>_main-2fa.ovpn

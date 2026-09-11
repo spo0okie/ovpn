@@ -236,6 +236,17 @@ assertExitCode "успешное завершение" "0" "$rc"
 assertFileContains "конфиг main выгружен" $CURL_LOG "openvpn/send1/tst_send1_main.ovpn"
 assertFileNotContains "конфиг main-2fa не выгружался" $CURL_LOG "openvpn/send1/tst_send1_main-2fa.ovpn"
 
+echo "инстанс: конфиг ищется с conf_prefix инстанса:"
+deploySendInstances
+cat >> $ovpn/_config <<CFG
+main_2fa_conf_prefix="tst2fa_"
+CFG
+mv $userdir/tst_send1_main-2fa.ovpn $userdir/tst2fa_send1_main-2fa.ovpn
+runSend send1 main-2fa
+assertExitCode "успешное завершение" "0" "$rc"
+mimefile=$(ls $CURL_UPLOADS/upload.* | tail -1)
+assertFileContains "вложение конфига с префиксом инстанса" $mimefile 'filename="tst2fa_send1_main-2fa.ovpn"'
+
 echo "СМС: успех подтверждается кодом шлюза:"
 deploySend
 runSend send1
