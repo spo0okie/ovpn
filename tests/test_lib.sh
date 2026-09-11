@@ -76,15 +76,16 @@ assertEquals "ccd_suffix .2fa" "/tmp/ovpn-test/clients/tst-u/ccd.2fa" "`getConfi
 assertEquals "ccd_suffix без переопределения - .local-2fa" "/tmp/ovpn-test/clients/tst-u/ccd.local-2fa" "`getConfigCcd u local-2fa`"
 unset main_ccd_suffix main_2fa_ccd_suffix
 
-echo "instConfPrefix: префикс имени клиентского конфига:"
-assertEquals "по умолчанию - <prefix>_" "tst_" "`instConfPrefix main`"
-main_conf_prefix=""
-main_2fa_conf_prefix="tst2fa_"
-assertEquals "conf_prefix пустой - без префикса" "" "`instConfPrefix main`"
-assertEquals "conf_prefix tst2fa_ ('-' -> '_')" "tst2fa_" "`instConfPrefix main-2fa`"
-assertEquals "conf_prefix без переопределения - <prefix>_" "tst_" "`instConfPrefix local-2fa`"
-unset main_conf_prefix main_2fa_conf_prefix
+echo "instConfSuffix: суффикс имени клиентского конфига:"
+assertEquals "multi по умолчанию - _<instance>" "_main" "`instConfSuffix main`"
+main_conf_suffix=""
+main_2fa_conf_suffix="_2fa"
+assertEquals "conf_suffix пустой - без суффикса" "" "`instConfSuffix main`"
+assertEquals "conf_suffix _2fa ('-' -> '_')" "_2fa" "`instConfSuffix main-2fa`"
+assertEquals "conf_suffix без переопределения - _local-2fa" "_local-2fa" "`instConfSuffix local-2fa`"
+unset main_conf_suffix main_2fa_conf_suffix
 unset instances
+assertEquals "одиночный режим - без суффикса" "" "`instConfSuffix local`"
 
 echo "_lib.inv: получение IP (через заглушку curl):"
 newSandbox

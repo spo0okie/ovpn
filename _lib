@@ -135,19 +135,19 @@ function instCcdSuffix() {
 	instFileSuffix . "$inst"
 }
 
-# префикс имени клиентского конфига инстанса $1 (<conf_prefix><CN><suffix>.ovpn
-# в папке пользователя). Можно переопределить атрибутом <instance>_conf_prefix
-# (например main_2fa_conf_prefix="tst2fa_"), в том числе пустой строкой
-# (main_conf_prefix="") - тогда имя начинается прямо с CN.
-# По умолчанию: "<prefix>_".
-function instConfPrefix() {
+# суффикс имени клиентского конфига инстанса $1 (<prefix>_<CN><suffix>.ovpn
+# в папке пользователя). Можно переопределить атрибутом <instance>_conf_suffix
+# (например main_2fa_conf_suffix="_2fa"), в том числе пустой строкой
+# (main_conf_suffix="") - тогда конфиг без суффикса, как в legacy.
+# По умолчанию: "" в вырожденном случае, "_<instance>" при заданном instances.
+function instConfSuffix() {
 	local inst=$1
-	local name=$(instVarName "$inst" conf_prefix)
+	local name=$(instVarName "$inst" conf_suffix)
 	if [[ -v "$name" ]]; then
 		echo "${!name}"
 		return 0
 	fi
-	echo "${prefix}_"
+	instFileSuffix _ "$inst"
 }
 
 #путь к папке конфига клиента $1 (clientsDir переопределяется в _config,

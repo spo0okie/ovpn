@@ -126,7 +126,7 @@ for inst in $instances_list; do
 		need2fa=1
 	fi
 
-	confBase=$userdir/$(instConfPrefix "$inst")${user}$(instFileSuffix _ "$inst")
+	confBase=$userdir/${prefix}_${user}$(instConfSuffix "$inst")
 	CONF=$confBase.ovpn
 	CONNCONF=${confBase}_connect.ovpn
 

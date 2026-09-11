@@ -45,7 +45,7 @@ confList=""
 if [ -n "$sendInstance" ]; then
 	#только конфиги указанного инстанса. Точные имена, глобом нельзя:
 	#имена инстансов пересекаются по префиксу (local и local-2fa)
-	confBase=$userdir/$(instConfPrefix "$sendInstance")$1$(instFileSuffix _ "$sendInstance")
+	confBase=$userdir/${prefix}_$1$(instConfSuffix "$sendInstance")
 	for conf in "$confBase.ovpn" "${confBase}_connect.ovpn"; do
 		[ -e "$conf" ] || continue
 		confList="$confList $conf"

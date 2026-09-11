@@ -137,8 +137,9 @@ main_2fa_gauth_dir=/etc/google-auth
 # имя CCD-файла на инстанс (по умолчанию ccd.<instance>):
 main_ccd_suffix=""          # -> ccd (без суффикса, как в legacy single)
 main_2fa_ccd_suffix=".2fa"  # -> ccd.2fa
-# префикс клиентского конфига на инстанс (по умолчанию <prefix>_):
-main_2fa_conf_prefix="example2fa_"  # -> example2fa_<CN>_main-2fa.ovpn
+# имя клиентского конфига на инстанс (по умолчанию <prefix>_<CN>_<instance>.ovpn):
+main_conf_suffix=""          # -> <prefix>_<CN>.ovpn
+main_2fa_conf_suffix="_2fa"  # -> <prefix>_<CN>_2fa.ovpn
 ```
 ```bash
 ./_reset.sh              # server-main.conf + server-main-2fa.conf (общие CA/серт/dh/ta)
@@ -150,10 +151,11 @@ main_2fa_conf_prefix="example2fa_"  # -> example2fa_<CN>_main-2fa.ovpn
 CCD без суффикса (`ccd`), иначе `ccd<суффикс>`. Если атрибут не задан, суффикс =
 `.<instance>`.
 
-Аналогично префикс клиентского конфига в папке пользователя управляется
-атрибутом `<instance>_conf_prefix`: конфиг называется
-`<conf_prefix><CN>_<instance>.ovpn` (и `..._connect.ovpn`), пустая строка — имя
-начинается сразу с CN. Если атрибут не задан, префикс = `<prefix>_`.
+Так же устроен суффикс клиентского конфига в папке пользователя — атрибут
+`<instance>_conf_suffix`: пустая строка — конфиг без суффикса
+(`<prefix>_<CN>.ovpn`), иначе `<prefix>_<CN><суффикс>.ovpn` (и
+`<prefix>_<CN><суффикс>_connect.ovpn`). Если атрибут не задан, суффикс =
+`_<instance>`.
 
 ### Добавить второй инстанс к существующему
 
