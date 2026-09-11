@@ -1,0 +1,32 @@
+#!/bin/bash
+#генерирует bash-файл с переменными <instance>_<user>=<ip>
+#использование: usr.ccd2env [output_file]
+#без output_file - вывод в stdout
+
+SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )" #"
+. $SCRIPTPATH/_config
+. $SCRIPTPATH/_lib
+
+output=${1:-}
+
+if [ -n "$output" ]; then
+	echo "#!/bin/bash" > "$output"
+	echo "# Auto-generated VPN user IP assignments" >> "$output"
+	echo "# Generated on $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$output"
+	echo "" >> "$output"
+fi
+
+for instance in $(getInstances); do
+	ccd_dir=$(inst_var $instance ccd_dir)
+	if [ -d "$ccd_dir" ]; then
+		for ccd_file in "$ccd_dir"/*; do
+			[ -e "$ccd_file" ] || continue
+			[ -f "$ccd_file" ] || [ -L "$ccd_file" ] || continue
+			user=$(basename "$ccd_file")
+			[[ "$user" == *_OFF ]] && continue
+			ip=$(getCcdIp "$ccd_file")
+			#'-' в имени инстанса недопустим в bash-переменной (instVarName: '-' -> '_')
+			[ -n "$ip" ] && echo "$(instVarName "$instance" "$user")=${ip}"
+		done
+	fi
+done >> "${output:-/dev/stdout}"

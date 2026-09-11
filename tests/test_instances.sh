@@ -179,9 +179,25 @@ deployInstances
 u=$ovpn/clients/tst-u8
 mkdir -p $u
 printf 'ifconfig-push 10.32.0.17 255.255.255.0\n' > $u/ccd.local
+printf 'ifconfig-push 10.132.0.17 255.255.255.0\n' > $u/ccd.local-2fa
 ( cd $ovpn && ./usr.enable u8 ) > $sandbox/out.log 2>&1
-assertExitCode "успешное завершение" "0" "$?"
+assertExitCode "включено на всех инстансах - код 0" "0" "$?"
 assertFileExists "симлинк обычного инстанса" $ovpn/ccd/u8
+assertFileExists "симлинк 2FA-инстанса" $ovpn/ccd-2fa/u8
+( cd $ovpn && ./usr.disable u8 ) > $sandbox/out.log 2>&1
+assertExitCode "отключено на всех инстансах - код 0" "0" "$?"
+assertFileMissing "симлинк обычного инстанса снят" $ovpn/ccd/u8
+assertFileMissing "симлинк 2FA-инстанса снят" $ovpn/ccd-2fa/u8
+
+echo "usr.enable без инстанса - ошибка не на последнем инстансе не теряется:"
+deployInstances
+u=$ovpn/clients/tst-ue1
+mkdir -p $u
+printf 'ifconfig-push 10.132.0.19 255.255.255.0\n' > $u/ccd.local-2fa
+( cd $ovpn && ./usr.enable ue1 ) > $sandbox/out.log 2>&1
+assertExitCode "нет CCD на local - ненулевой код" "1" "$?"
+assertFileContains "причина в выводе" $sandbox/out.log "нет CCD для ue1@local"
+assertFileExists "остальные инстансы всё равно включены" $ovpn/ccd-2fa/ue1
 
 echo "одиночный режим: дефолтный инстанс без суффикса CCD:"
 newSandbox

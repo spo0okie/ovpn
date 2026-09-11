@@ -16,10 +16,12 @@ instance=${2:-}
 
 if [ -z "$instance" ]; then
 	echo "сервер не указан явно. влючаем все..."
+	#ненулевой код, если не удалось хоть на одном инстансе (а не только на последнем)
+	rc=0
 	for inst in $(getInstances); do
-		$SCRIPTPATH/usr.enable $user $inst
+		$SCRIPTPATH/usr.enable $user $inst || rc=$?
 	done
-	exit
+	exit $rc
 fi
 
 echo "включаем $user@$instance..."

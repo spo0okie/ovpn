@@ -20,13 +20,15 @@ instance=${2:-}
 action=${3:-enable}
 
 if [ -z "$instance" ]; then
+	#ненулевой код, если не удалось хоть на одном инстансе (а не только на последнем)
+	rc=0
 	for inst in $(getInstances); do
 		ccd=$(getConfigCcd $user $inst)
 		if [ -s "$ccd" ] || [ -s "$ccd.disabled" ]; then
-			$SCRIPTPATH/usr.publish $user $inst $action
+			$SCRIPTPATH/usr.publish $user $inst $action || rc=$?
 		fi
 	done
-	exit
+	exit $rc
 fi
 
 delivery=$(inst_var $instance delivery)
