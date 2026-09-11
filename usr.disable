@@ -15,13 +15,12 @@ user=$1
 instance=${2:-}
 
 if [ -z "$instance" ]; then
+	echo "сервер не указан явно. отключаем все..."
 	for inst in $(getInstances); do
-		ccd=$(getConfigCcd $user $inst)
-		if [ -s "$ccd" ] || [ -s "$ccd.disabled" ]; then
-			$SCRIPTPATH/usr.disable $user $inst
-		fi
+		$SCRIPTPATH/usr.disable $user $inst
 	done
 	exit
 fi
 
+echo "отключаем $user@$instance..."
 $SCRIPTPATH/usr.publish $user $instance disable
