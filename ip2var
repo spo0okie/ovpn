@@ -1,0 +1,64 @@
+#!/bin/bash
+#подставляет переменные вместо IP-адресов в bash-скрипт с правилами iptables
+#использование: ip2var <файл переменных> <скрипт> [файл результата]
+# $1 - файл от usr.ccd2env (строки <CN><ccd_suffix>=<ip>)
+# $2 - скрипт с правилами; сам файл не изменяется
+# $3 - куда писать результат; без него - stdout
+#подставляется ${имя} (а не $имя): рядом с маской и портом так однозначно.
+#Сводка и предупреждения идут в stderr, чтобы не мешать выводу в stdout.
+
+if [ -z "$1" ] || [ -z "$2" ]; then
+	echo "использование: ip2var <файл переменных> <скрипт> [файл результата]" >&2
+	exit 1
+fi
+
+varsFile=$1
+srcFile=$2
+output=${3:-}
+
+if [ ! -s "$varsFile" ]; then
+	echo "нет файла переменных $varsFile" >&2
+	exit 1
+fi
+
+if [ ! -s "$srcFile" ]; then
+	echo "нет скрипта $srcFile" >&2
+	exit 1
+fi
+
+sedScript=`mktemp`
+trap 'rm -f "$sedScript"' EXIT
+
+declare -A ipVar=()
+total=0
+used=0
+
+while IFS='=' read -r name ip; do
+	#берем только присваивания вида имя=IPv4: заголовок и комментарии пропускаем
+	[[ "$name" =~ ^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*$ ]] || continue
+	[[ "$ip" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || continue
+	name=${name//[[:space:]]/}
+	if [ -n "${ipVar[$ip]}" ]; then
+		echo "ВНИМАНИЕ: адрес $ip повторяется ($name и ${ipVar[$ip]}) - беру ${ipVar[$ip]}" >&2
+		continue
+	fi
+	ipVar[$ip]=$name
+	total=$((total+1))
+	esc=${ip//./\\.}
+	#\b - граница слова: иначе 10.32.0.5 совпал бы внутри 10.32.0.50
+	printf 's/\\b%s\\b/${%s}/g\n' "$esc" "$name" >> "$sedScript"
+	grep -qE "(^|[^0-9.])$esc([^0-9.]|$)" "$srcFile" && used=$((used+1))
+done < "$varsFile"
+
+if [ "$total" -eq 0 ]; then
+	echo "в $varsFile нет ни одного адреса - нечего подставлять" >&2
+	exit 1
+fi
+
+if [ -n "$output" ]; then
+	sed -f "$sedScript" "$srcFile" > "$output"
+else
+	sed -f "$sedScript" "$srcFile"
+fi
+
+echo "подставлено переменных: $used из $total" >&2

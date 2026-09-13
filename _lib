@@ -135,6 +135,14 @@ function instCcdSuffix() {
 	instFileSuffix . "$inst"
 }
 
+#имя bash-переменной для адреса клиента $1 на инстансе $2: <CN><ccd_suffix> -
+#то есть имя переменной повторяет имя CCD-файла в профиле (ccd.2fa -> <CN>_2fa).
+#Недопустимые в имени переменной символы ('-' в логине, '.' из суффикса)
+#заменяются на '_': ivanov-ii + ccd.local-2fa -> ivanov_ii_local_2fa
+function ccdVarName() {
+	echo "$1$(instCcdSuffix "$2")" | tr -c 'A-Za-z0-9_\n' '_'
+}
+
 # суффикс имени клиентского конфига инстанса $1 (<prefix>_<CN><suffix>.ovpn
 # в папке пользователя). Можно переопределить атрибутом <instance>_conf_suffix
 # (например main_2fa_conf_suffix="_2fa"), в том числе пустой строкой

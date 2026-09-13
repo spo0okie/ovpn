@@ -1,10 +1,9 @@
 #!/bin/bash
-#генерирует bash-файл с переменными <instance>_<user>=<ip>
+#генерирует bash-файл с переменными <CN><ccd_suffix>=<ip>: имя переменной
+#повторяет имя CCD-файла в профиле (ccd.2fa -> <CN>_2fa), см. ccdVarName в _lib
 #обход идет по папкам-профилям пользователей (clients/<prefix>-<user>), а не по
 #каталогам публикации CCD: иначе в списке не будет отключенных пользователей
 #(CCD лежит как <ccd>.disabled), и генератор iptables не узнает про их адреса.
-#'-' недопустим в имени bash-переменной, поэтому и в имени инстанса, и в имени
-#пользователя заменяется на '_' (ivanov-ii на local-2fa -> local_2fa_ivanov_ii)
 #использование: usr.ccd2env [output_file]
 #без output_file - вывод в stdout
 
@@ -27,7 +26,7 @@ for instance in $(getInstances); do
 		user=${d##*/$prefix-}
 		#getCcdIp сам заглядывает в $ccd.disabled, если активного CCD нет
 		ip=$(getCcdIp "$(getConfigCcd "$user" "$instance")")
-		[ -n "$ip" ] && echo "$(instVarName "$instance" "$(echo "$user" | tr '-' '_')")=${ip}"
+		[ -n "$ip" ] && echo "$(ccdVarName "$user" "$instance")=${ip}"
 	done
 done >> "${output:-/dev/stdout}"
 

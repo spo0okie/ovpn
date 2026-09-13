@@ -87,6 +87,18 @@ unset main_conf_suffix main_2fa_conf_suffix
 unset instances
 assertEquals "одиночный режим - без суффикса" "" "`instConfSuffix local`"
 
+echo "ccdVarName: имя переменной для адреса клиента (<CN><ccd_suffix>):"
+instances="local local-2fa"
+assertEquals "multi - <CN>_<instance>" "u1_local" "`ccdVarName u1 local`"
+assertEquals "'-' в логине и инстансе -> '_'" "iv_ii_local_2fa" "`ccdVarName iv-ii local-2fa`"
+main_ccd_suffix=""
+main_2fa_ccd_suffix=".2fa"
+assertEquals "пустой ccd_suffix - только CN" "u1" "`ccdVarName u1 main`"
+assertEquals "ccd_suffix .2fa -> _2fa" "u1_2fa" "`ccdVarName u1 main-2fa`"
+unset main_ccd_suffix main_2fa_ccd_suffix
+unset instances
+assertEquals "одиночный режим - только CN" "u1" "`ccdVarName u1 local`"
+
 echo "checkVarsNotEmpty: все объявленные переменные заполнены:"
 newSandbox
 cat > $sandbox/vars.sh <<'VARS'

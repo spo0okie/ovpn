@@ -6,7 +6,7 @@ cd "$(dirname "$0")"
 echo "== проверка синтаксиса скриптов"
 synfail=0
 for f in ../_lib ../_lib.inv ../_reset.sh ../_renew.CA.sh ../upd.crl ../usr.* \
-         ../multisite/migrate-to-instances.sh; do
+         ../ip2var ../multisite/migrate-to-instances.sh; do
 	if ! bash -n "$f" 2>&1; then
 		echo "  SYNTAX FAIL: $f"
 		synfail=1

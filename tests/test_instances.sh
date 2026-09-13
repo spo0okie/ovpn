@@ -228,16 +228,31 @@ printf 'ifconfig-push 10.32.0.53 255.255.255.0\n' > $ovpn/clients/tst-iv-ii/ccd.
 out=$sandbox/ccd.env
 ( cd $ovpn && ./usr.ccd2env $out ) >/dev/null 2>&1
 assertExitCode "успешное завершение" "0" "$?"
-assertFileContains "local инстанс: пользователь u10" $out "local_u10=10.32.0.50"
-assertFileContains "2fa инстанс: пользователь u10" $out "local_2fa_u10=10.132.0.51"
-assertFileContains "отключенный CCD тоже в списке" $out "local_u11=10.32.0.52"
-assertFileContains "'-' в логине -> '_'" $out "local_iv_ii=10.32.0.53"
-assertFileNotContains "инстанса без CCD у пользователя нет" $out "local_2fa_u11"
+assertFileContains "local инстанс: пользователь u10" $out "u10_local=10.32.0.50"
+assertFileContains "2fa инстанс: пользователь u10" $out "u10_local_2fa=10.132.0.51"
+assertFileContains "отключенный CCD тоже в списке" $out "u11_local=10.32.0.52"
+assertFileContains "'-' в логине -> '_'" $out "iv_ii_local=10.32.0.53"
+assertFileNotContains "инстанса без CCD у пользователя нет" $out "u11_local_2fa"
 assertFileContains "заголовок bash-файла" $out "#!/bin/bash"
 
 echo "usr.ccd2env - публикация CCD на результат не влияет:"
 assertFileMissing "каталог публикации пуст (CCD не публиковались)" $ovpn/ccd/u10
-assertFileContains "адреса собраны из профилей" $out "local_u10=10.32.0.50"
+assertFileContains "адреса собраны из профилей" $out "u10_local=10.32.0.50"
+
+echo "usr.ccd2env - имя переменной = <CN><ccd_suffix>:"
+deployInstances
+cat >> $ovpn/_config <<CFG
+local_ccd_suffix=""
+local_2fa_ccd_suffix=".2fa"
+CFG
+mkdir -p $ovpn/clients/tst-u13
+printf 'ifconfig-push 10.32.0.70 255.255.255.0\n' > $ovpn/clients/tst-u13/ccd
+printf 'ifconfig-push 10.132.0.71 255.255.255.0\n' > $ovpn/clients/tst-u13/ccd.2fa
+out=$sandbox/ccd2.env
+( cd $ovpn && ./usr.ccd2env $out ) >/dev/null 2>&1
+assertExitCode "успешное завершение" "0" "$?"
+assertFileContains "пустой ccd_suffix - переменная равна CN" $out "u13=10.32.0.70"
+assertFileContains "ccd_suffix .2fa -> _2fa" $out "u13_2fa=10.132.0.71"
 
 echo "usr.ccd2env - вывод в stdout:"
 deployInstances
