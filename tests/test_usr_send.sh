@@ -140,8 +140,8 @@ assertExitCode "успешное завершение" "0" "$rc"
 mimefile=$(ls $CURL_UPLOADS/upload.* | tail -1)
 mailbody=$(extractMailBody "$mimefile")
 assertNotContains "письмо не обещает пароль без зашифрованного ключа" "СМС-сообщением" "$mailbody"
-assertNotContains "пароль не отправлен для незашифрованного конфига" $CURL_LOG "text=пароль"
-assertNotContains "2FA-секрет не отправлен без auth-user-pass" $CURL_LOG "text=Ключ Google"
+assertFileNotContains "пароль не отправлен для незашифрованного конфига" $CURL_LOG "text=пароль"
+assertFileNotContains "2FA-секрет не отправлен без auth-user-pass" $CURL_LOG "text=Ключ Google"
 assertFileNotContains "номер не запрашивается, когда СМС не нужны" $CURL_LOG "expand=private_phone"
 assertFileContains "явно сказано, что секреты не нужны" $sandbox/out.log "передача секретов не требуется"
 

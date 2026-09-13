@@ -1,5 +1,10 @@
 #!/bin/bash
 #генерирует bash-файл с переменными <instance>_<user>=<ip>
+#обход идет по папкам-профилям пользователей (clients/<prefix>-<user>), а не по
+#каталогам публикации CCD: иначе в списке не будет отключенных пользователей
+#(CCD лежит как <ccd>.disabled), и генератор iptables не узнает про их адреса.
+#'-' недопустим в имени bash-переменной, поэтому и в имени инстанса, и в имени
+#пользователя заменяется на '_' (ivanov-ii на local-2fa -> local_2fa_ivanov_ii)
 #использование: usr.ccd2env [output_file]
 #без output_file - вывод в stdout
 
@@ -17,16 +22,15 @@ if [ -n "$output" ]; then
 fi
 
 for instance in $(getInstances); do
-	ccd_dir=$(inst_var $instance ccd_dir)
-	if [ -d "$ccd_dir" ]; then
-		for ccd_file in "$ccd_dir"/*; do
-			[ -e "$ccd_file" ] || continue
-			[ -f "$ccd_file" ] || [ -L "$ccd_file" ] || continue
-			user=$(basename "$ccd_file")
-			[[ "$user" == *_OFF ]] && continue
-			ip=$(getCcdIp "$ccd_file")
-			#'-' в имени инстанса недопустим в bash-переменной (instVarName: '-' -> '_')
-			[ -n "$ip" ] && echo "$(instVarName "$instance" "$user")=${ip}"
-		done
-	fi
+	for d in ${clientsDir:-$ovpndir/clients}/$prefix-*; do
+		[ -d "$d" ] || continue
+		user=${d##*/$prefix-}
+		#getCcdIp сам заглядывает в $ccd.disabled, если активного CCD нет
+		ip=$(getCcdIp "$(getConfigCcd "$user" "$instance")")
+		[ -n "$ip" ] && echo "$(instVarName "$instance" "$(echo "$user" | tr '-' '_')")=${ip}"
+	done
 done >> "${output:-/dev/stdout}"
+
+#код выхода цикла - от последней проверки [ -n "$ip" ], а у последнего профиля
+#CCD на этом инстансе может и не быть: отсутствие адреса ошибкой не считаем
+exit 0

@@ -163,6 +163,31 @@ function getConfigCcd() {
 	echo $(getConfigDir $user)/ccd$(instCcdSuffix "$inst")
 }
 
+#проверка, что все переменные, объявленные в вызвавшем функцию bash-файле, не
+#пусты (например сгенерированный usr.ccd2env список адресов: пустая переменная
+#в генераторе iptables дает битое правило).
+# $1 - файл (по умолчанию - тот, из которого вызвана функция)
+#Печатает имена пустых переменных и возвращает 1, если такие нашлись.
+function checkVarsNotEmpty() {
+	local src=${1:-${BASH_SOURCE[1]}}
+	if [ ! -s "$src" ]; then
+		echo "нечего проверять: нет файла $src"
+		return 1
+	fi
+	local empty="" name
+	#присваивания в начале строки (закомментированные не в счет), export - тоже
+	for name in $(grep -oE '^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*=' "$src" \
+	              | sed -E 's/^[[:space:]]*(export[[:space:]]+)?//; s/=$//' | sort -u); do
+		[ -n "${!name}" ] && continue
+		empty="$empty $name"
+	done
+	if [ -n "$empty" ]; then
+		echo "пустые переменные в $src:$empty"
+		return 1
+	fi
+	return 0
+}
+
 #получить IP адрес из CCD (учитывает отключенный $ccd.disabled)
 # $1 - путь к CCD
 function getCcdIp() {

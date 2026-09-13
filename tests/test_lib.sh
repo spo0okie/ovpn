@@ -87,6 +87,40 @@ unset main_conf_suffix main_2fa_conf_suffix
 unset instances
 assertEquals "одиночный режим - без суффикса" "" "`instConfSuffix local`"
 
+echo "checkVarsNotEmpty: все объявленные переменные заполнены:"
+newSandbox
+cat > $sandbox/vars.sh <<'VARS'
+foo=1
+export bar=2
+#baz=3
+VARS
+foo=1
+bar=2
+checkVarsNotEmpty $sandbox/vars.sh > $sandbox/out.log
+assertExitCode "все заполнены - код 0" "0" "$?"
+bar=""
+checkVarsNotEmpty $sandbox/vars.sh > $sandbox/out.log
+assertExitCode "есть пустая - код 1" "1" "$?"
+assertFileContains "имя пустой переменной в выводе" $sandbox/out.log " bar"
+assertFileNotContains "заполненная не упомянута" $sandbox/out.log " foo"
+assertFileNotContains "закомментированная не проверяется" $sandbox/out.log " baz"
+unset foo bar
+
+checkVarsNotEmpty $sandbox/nosuchfile > $sandbox/out.log
+assertExitCode "нет файла - код 1" "1" "$?"
+
+echo "checkVarsNotEmpty: по умолчанию - вызвавший файл:"
+cat > $sandbox/caller.sh <<CALLER
+. $REPO_DIR/_lib
+filled=1
+blank=
+checkVarsNotEmpty
+CALLER
+out=$(bash $sandbox/caller.sh)
+assertExitCode "пустая переменная в вызвавшем файле - код 1" "1" "$?"
+assertContains "названа пустая переменная" "blank" "$out"
+assertNotContains "заполненная не названа" "filled" "$out"
+
 echo "_lib.inv: получение IP (через заглушку curl):"
 newSandbox
 export inventoryApiUrl=https://inventory.test.local/api

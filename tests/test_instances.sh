@@ -217,27 +217,35 @@ curlRoute "net-ips/search?name=ovpn-u9" '{"text_addr":"10.64.68.15"}'
 assertFileExists "CCD без суффикса (ccd)" $ovpn/clients/tst-u9/ccd
 assertFileMissing "нет ccd.local в одиночном режиме" $ovpn/clients/tst-u9/ccd.local
 
-echo "usr.ccd2env - вывод IP из CCD всех инстансов:"
+echo "usr.ccd2env - обход профилей пользователей, включая отключенные CCD:"
 deployInstances
-mkdir -p $ovpn/ccd $ovpn/ccd-2fa
-printf 'ifconfig-push 10.32.0.50 255.255.255.0\n' > $ovpn/ccd/u10
-printf 'ifconfig-push 10.132.0.51 255.255.255.0\n' > $ovpn/ccd-2fa/u10
-printf 'ifconfig-push 10.32.0.52 255.255.255.0\n' > $ovpn/ccd/u11
+mkdir -p $ovpn/clients/tst-u10 $ovpn/clients/tst-u11 $ovpn/clients/tst-iv-ii
+#u10 - на обоих инстансах, u11 - только отключенный, iv-ii - '-' в логине
+printf 'ifconfig-push 10.32.0.50 255.255.255.0\n' > $ovpn/clients/tst-u10/ccd.local
+printf 'ifconfig-push 10.132.0.51 255.255.255.0\n' > $ovpn/clients/tst-u10/ccd.local-2fa
+printf 'ifconfig-push 10.32.0.52 255.255.255.0\n' > $ovpn/clients/tst-u11/ccd.local.disabled
+printf 'ifconfig-push 10.32.0.53 255.255.255.0\n' > $ovpn/clients/tst-iv-ii/ccd.local
 out=$sandbox/ccd.env
 ( cd $ovpn && ./usr.ccd2env $out ) >/dev/null 2>&1
 assertExitCode "успешное завершение" "0" "$?"
 assertFileContains "local инстанс: пользователь u10" $out "local_u10=10.32.0.50"
 assertFileContains "2fa инстанс: пользователь u10" $out "local_2fa_u10=10.132.0.51"
-assertFileContains "local инстанс: пользователь u11" $out "local_u11=10.32.0.52"
+assertFileContains "отключенный CCD тоже в списке" $out "local_u11=10.32.0.52"
+assertFileContains "'-' в логине -> '_'" $out "local_iv_ii=10.32.0.53"
+assertFileNotContains "инстанса без CCD у пользователя нет" $out "local_2fa_u11"
 assertFileContains "заголовок bash-файла" $out "#!/bin/bash"
+
+echo "usr.ccd2env - публикация CCD на результат не влияет:"
+assertFileMissing "каталог публикации пуст (CCD не публиковались)" $ovpn/ccd/u10
+assertFileContains "адреса собраны из профилей" $out "local_u10=10.32.0.50"
 
 echo "usr.ccd2env - вывод в stdout:"
 deployInstances
-mkdir -p $ovpn/ccd
-printf 'ifconfig-push 10.32.0.60 255.255.255.0\n' > $ovpn/ccd/u12
+mkdir -p $ovpn/clients/tst-u12
+printf 'ifconfig-push 10.32.0.60 255.255.255.0\n' > $ovpn/clients/tst-u12/ccd.local
 out=$(cd $ovpn && ./usr.ccd2env)
 assertExitCode "успешное завершение" "0" "${PIPESTATUS[0]}"
-assertContains "stdout: local_u12" "$out" "local_u12=10.32.0.60"
-assertNotContains "stdout без заголовка" "$out" "#!/bin/bash"
+assertContains "stdout: local_u12" "local_u12=10.32.0.60" "$out"
+assertNotContains "stdout без заголовка" "#!/bin/bash" "$out"
 
 summarize
