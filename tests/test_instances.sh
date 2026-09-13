@@ -260,7 +260,7 @@ mkdir -p $ovpn/clients/tst-u12
 printf 'ifconfig-push 10.32.0.60 255.255.255.0\n' > $ovpn/clients/tst-u12/ccd.local
 out=$(cd $ovpn && ./usr.ccd2env)
 assertExitCode "успешное завершение" "0" "${PIPESTATUS[0]}"
-assertContains "stdout: local_u12" "local_u12=10.32.0.60" "$out"
+assertContains "stdout: u12_local" "u12_local=10.32.0.60" "$out"
 assertNotContains "stdout без заголовка" "#!/bin/bash" "$out"
 
 summarize

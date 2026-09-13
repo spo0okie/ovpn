@@ -99,39 +99,47 @@ unset main_ccd_suffix main_2fa_ccd_suffix
 unset instances
 assertEquals "одиночный режим - только CN" "u1" "`ccdVarName u1 local`"
 
-echo "checkVarsNotEmpty: все объявленные переменные заполнены:"
+echo "checkVarsNotEmpty: проверяются переменные, использованные в файле:"
 newSandbox
-cat > $sandbox/vars.sh <<'VARS'
-foo=1
-export bar=2
-#baz=3
-VARS
-foo=1
-bar=2
-checkVarsNotEmpty $sandbox/vars.sh > $sandbox/out.log
-assertExitCode "все заполнены - код 0" "0" "$?"
-bar=""
-checkVarsNotEmpty $sandbox/vars.sh > $sandbox/out.log
+cat > $sandbox/fw.sh <<'FW'
+#!/bin/bash
+iptables -A FORWARD -s $u10_local -j ACCEPT
+iptables -A FORWARD -s ${u11_local} -d $u10_local -j ACCEPT
+#iptables -A FORWARD -s $u12_local -j ACCEPT
+iptables -A FORWARD -i $1 -j ACCEPT
+FW
+u10_local=10.32.0.5
+u11_local=10.32.0.6
+checkVarsNotEmpty $sandbox/fw.sh > $sandbox/out.log
+assertExitCode "все использованные заполнены - код 0" "0" "$?"
+
+u11_local=""
+checkVarsNotEmpty $sandbox/fw.sh > $sandbox/out.log
 assertExitCode "есть пустая - код 1" "1" "$?"
-assertFileContains "имя пустой переменной в выводе" $sandbox/out.log " bar"
-assertFileNotContains "заполненная не упомянута" $sandbox/out.log " foo"
-assertFileNotContains "закомментированная не проверяется" $sandbox/out.log " baz"
-unset foo bar
+assertFileContains "названа пустая переменная" $sandbox/out.log " u11_local"
+assertFileNotContains "заполненная не названа" $sandbox/out.log " u10_local"
+assertFileNotContains "из комментария не проверяется" $sandbox/out.log " u12_local"
+
+unset u10_local u11_local
+checkVarsNotEmpty $sandbox/fw.sh > $sandbox/out.log
+assertExitCode "не заданная переменная - код 1" "1" "$?"
+assertFileContains "названа не заданная переменная" $sandbox/out.log " u10_local"
 
 checkVarsNotEmpty $sandbox/nosuchfile > $sandbox/out.log
 assertExitCode "нет файла - код 1" "1" "$?"
 
-echo "checkVarsNotEmpty: по умолчанию - вызвавший файл:"
+echo "checkVarsNotEmpty: по умолчанию - вызвавший файл (как в фаерволе):"
+printf 'u10_local=10.32.0.5\n' > $sandbox/ccd.env
 cat > $sandbox/caller.sh <<CALLER
 . $REPO_DIR/_lib
-filled=1
-blank=
+. $sandbox/ccd.env
+echo "-s \$u10_local -d \$missing_var" >/dev/null
 checkVarsNotEmpty
 CALLER
 out=$(bash $sandbox/caller.sh)
-assertExitCode "пустая переменная в вызвавшем файле - код 1" "1" "$?"
-assertContains "названа пустая переменная" "blank" "$out"
-assertNotContains "заполненная не названа" "filled" "$out"
+assertExitCode "в вызвавшем файле есть незаданная - код 1" "1" "$?"
+assertContains "названа незаданная переменная" "missing_var" "$out"
+assertNotContains "пришедшая из ccd.env не названа" "u10_local" "$out"
 
 echo "_lib.inv: получение IP (через заглушку curl):"
 newSandbox
